@@ -23,7 +23,9 @@ executable Master
                        hackage-db,
                        containers,
                        Cabal,
-                       shake
+                       shake,
+                       directory
   default-language:    Haskell2010
+  ghc-options:         -rtsopts -threaded
 
 

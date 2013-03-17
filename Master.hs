@@ -3,6 +3,8 @@ module Main where
 import Development.Shake
 import Development.Shake.FilePath
 
+import System.Directory hiding (doesFileExist)
+
 
 import Paths
 import ExtractPackageList
@@ -11,12 +13,16 @@ import DownloadPackage
 
 
 main :: IO ()
-main = shakeWithArgs (removeFiles "gen" []) shakeOptions $ do
+main = shakeWithArgs (removeDirectoryRecursive "gen") shakeOptions {shakeThreads = 4} $ do
 
     want [wd</>"DownloadedPackages"]
 
     wd</>"00-index.tar.gz" *> \out -> do
-        systemCwd wd "wget" [hackageUrl++"00-index.tar.gz"]
+        exists <- doesFileExist "00-index.tar.gz"
+        if exists then
+            copyFile' "00-index.tar.gz" out
+        else
+            systemCwd wd "wget" [hackageUrl++"00-index.tar.gz"]
 
     wd</>"PackageList.txt" *> extractPackageList
 
