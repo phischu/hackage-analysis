@@ -37,6 +37,11 @@ executable GetPackages
                        hackage-db,
                        containers,
                        Cabal,
-                       pipes
+                       pipes,
+                       time,
+                       tar,
+                       zlib,
+                       HTTP,
+                       bytestring
   default-language:    Haskell2010
 
