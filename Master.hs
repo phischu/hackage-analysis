@@ -10,6 +10,8 @@ import Paths
 import ExtractPackageList
 import DownloadPackages
 import DownloadPackage
+import ExtractPackages
+import ExtractPackage
 
 
 main :: IO ()
@@ -29,6 +31,21 @@ main = shakeWithArgs (removeDirectoryRecursive "gen") shakeOptions {shakeThreads
     wd</>"DownloadedPackages" *> downloadPackages
 
     wd</>"PackageArchives/*/*/*.tar.gz" *> downloadPackage
+
+    wd</>"ExtractedPackages" *> extractPackages
+
+    wd</>"PackageArchives/*/*/*.extracted" *> extractPackage
+
+
+
+
+
+
+
+
+
+
+
 
 
 

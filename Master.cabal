@@ -18,7 +18,9 @@ executable Master
   main-is:             Master.hs
   other-modules:       ExtractPackageList,
                        DownloadPackages,
-                       DownloadPackage
+                       DownloadPackage,
+                       ExtractPackages,
+                       ExtractPackage
   build-depends:       base,
                        hackage-db,
                        containers,
