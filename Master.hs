@@ -7,21 +7,22 @@ import Development.Shake.FilePath
 import Paths
 import ExtractPackageList
 import DownloadPackages
+import DownloadPackage
 
 
 main :: IO ()
 main = shakeWithArgs (removeFiles "gen" []) shakeOptions $ do
 
-    want [wd</>"getPackages"]
+    want [wd</>"DownloadedPackages"]
 
     wd</>"00-index.tar.gz" *> \out -> do
         systemCwd wd "wget" [hackageUrl++"00-index.tar.gz"]
 
-    wd</>"packageList.txt" *> extractPackageList
+    wd</>"PackageList.txt" *> extractPackageList
 
-    wd</>"getPackages" *> downloadPackages
+    wd</>"DownloadedPackages" *> downloadPackages
 
-
+    wd</>"PackageArchives/*/*/*.tar.gz" *> downloadPackage
 
 
 
