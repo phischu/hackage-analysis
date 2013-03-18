@@ -32,9 +32,9 @@ main = shakeWithArgs (removeDirectoryRecursive "gen") shakeOptions {shakeThreads
 
     wd</>"PackageArchives/*/*/*.tar.gz" *> downloadPackage
 
-    wd</>"ExtractedPackages" *> extractPackages
+    wd</>"PackagesExtracted" *> extractPackages
 
-    wd</>"PackageArchives/*/*/*.extracted" *> extractPackage
+    wd</>"ExtractedPackages/*/*/*" *> extractPackage
 
 
 

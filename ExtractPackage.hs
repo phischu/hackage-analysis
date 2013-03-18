@@ -14,10 +14,14 @@ extractPackage out = do
     writeFile' out []
 
 filenameToArchiveName :: FilePath -> FilePath
-filenameToArchiveName = undefined
+filenameToArchiveName path = wd</>"PackageArchives"</>name</>version</>name++"-"++version<.>"tar"<.>"gz" where
+    name = head (drop 2 path)
+    version = head (drop 3 path)
 
 targetDirectory :: FilePath -> FilePath
-targetDirectory = undefined
+targetDirectory = wd</>"ExtractedPackages"</>name</>version</>name++"-"++version where
+    name = head (drop 2 path)
+    version = head (drop 3 path)
 
 
 

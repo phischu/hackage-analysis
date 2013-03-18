@@ -16,7 +16,7 @@ extractPackages out = do
     writeFile' out ""
 
 packageToExtractedName :: String -> FilePath
-packageToExtractedName package = wd</>"PackageArchives"</>name</>version</>name++"-"++version<.>"extracted"where
+packageToExtractedName package = wd</>"ExtractedPackages"</>name</>version</>name++"-"++version where
     (name,version) = read package
 
 
