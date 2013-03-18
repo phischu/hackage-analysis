@@ -15,6 +15,7 @@ type Version = String
 
 newtype ExtractedPackage = ExtractedPackage Package deriving (Show,Typeable,Eq,Hashable,Binary,NFData)
 newtype PackageArchive = PackageArchive Package deriving (Show,Typeable,Eq,Hashable,Binary,NFData)
+newtype PackageList = PackageList [Package] deriving (Show,Typeable,Eq,Hashable,Binary,NFData)
 
 instance Rule ExtractedPackage () where
     storedValue (ExtractedPackage (Package (name,version))) = do
@@ -25,6 +26,9 @@ instance Rule PackageArchive () where
     storedValue (PackageArchive package) = do
         exists <- IO.doesFileExist (archiveDirectory package)
         if exists then return (Just ()) else return Nothing
+
+instance Rule () PackageList where
+    storedValue () = return Nothing
 
 extractedDirectory :: FilePath
 extractedDirectory = "Packages/"
@@ -38,7 +42,11 @@ packageUrl (Package (name,version)) = concat ["hackage.haskell.org/packages/arch
 main :: IO ()
 main = shake shakeOptions {shakeThreads = 4} $ do
 
-    action (apply1 (ExtractedPackage (Package ("aeson-lens","0.1.0.2"))) :: Action ())
+    action (do
+        PackageList packages <- apply1 ()
+        apply (map ExtractedPackage packages) :: Action [()])
+
+    rule (\() -> Just (return (PackageList [Package ("aeson-lens","0.1.0.2")])))
 
     rule (\(ExtractedPackage package) -> Just $ do
         liftIO (IO.createDirectoryIfMissing True extractedDirectory)
