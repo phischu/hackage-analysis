@@ -8,6 +8,7 @@ import Development.Shake.Classes
 import qualified System.Directory as IO
 import qualified Data.Map as M
 import Distribution.Text
+import qualified Data.Version as V
 
 import Distribution.Hackage.DB (readHackage')
 
@@ -44,7 +45,7 @@ packageUrl :: Package -> String
 packageUrl (Package (name,version)) = concat ["hackage.haskell.org/packages/archive/",name,"/",version,"/",name,"-",version,".tar.gz"]
 
 main :: IO ()
-main = shakeArgs shakeOptions {shakeThreads = 10} $ do
+main = shakeArgs shakeOptions {shakeThreads = 4} $ do
 
     action (do
         PackageList packages <- apply1 (GetPackageList ())
@@ -53,7 +54,7 @@ main = shakeArgs shakeOptions {shakeThreads = 10} $ do
     rule (\(GetPackageList ()) -> Just (do
         need ["00-index.tar"]
         hackage <- liftIO (readHackage' "00-index.tar")
-        let packages = [Package (name,show (disp version))| name <- M.keys hackage, version <- M.keys (hackage M.! name)]
+        let packages = [Package (name,renderVersion version)| name <- M.keys hackage, version <- M.keys (hackage M.! name)]
         return (PackageList (every 1 packages))))
 
     rule (\(ExtractedPackage package) -> Just $ do
@@ -76,7 +77,12 @@ every :: Int -> [a] -> [a]
 every nth [] = []
 every nth xs = head xs : every nth (drop nth xs)
 
+renderVersion :: V.Version -> String
+renderVersion version@(V.Version branch tags) = addtags tags (show (disp version))
 
+addtags :: [String] -> String -> String
+addtags [] s = s
+addtags (x:xs) s = addtags xs (s++"-"++x)
 
 
 
