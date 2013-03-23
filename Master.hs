@@ -7,11 +7,15 @@ import Development.Shake.Classes
 
 import qualified System.Directory as IO
 import qualified Data.Map as M
+import Data.Maybe
+import Control.Monad
 import Distribution.Text
 import qualified Data.Version as V
 
 import Distribution.Hackage.DB (readHackage')
 import Distribution.PackageDescription.Parse
+import Distribution.PackageDescription
+import Distribution.ModuleName hiding (main)
 import Distribution.Verbosity
 import Distribution.PackageDescription.Configuration
 import Distribution.System
@@ -30,7 +34,7 @@ newtype PackageArchive = PackageArchive Package deriving (Show,Typeable,Eq,Hasha
 newtype GetPackageList = GetPackageList () deriving (Show,Typeable,Eq,Hashable,Binary,NFData)
 newtype PackageList = PackageList [Package] deriving (Show,Typeable,Eq,Hashable,Binary,NFData)
 newtype GetModulesInPackage = GetModulesInPackage Package deriving (Show,Typeable,Eq,Hashable,Binary,NFData)
-newtype ModulesList = ModulesList [Module] deriving (Show,Typeable,Eq,Hashable,Binary,NFData,Read)
+newtype ModuleList = ModuleList [Module] deriving (Show,Typeable,Eq,Hashable,Binary,NFData,Read)
 
 instance Rule ExtractedPackage () where
     storedValue (ExtractedPackage (Package (name,version))) = do
@@ -45,7 +49,7 @@ instance Rule PackageArchive () where
 instance Rule GetPackageList PackageList where
     storedValue (GetPackageList ()) = return Nothing
 
-instance Rule GetModulesInPackage ModulesList where
+instance Rule GetModulesInPackage ModuleList where
     storedValue (GetModulesInPackage package) = do
         exists <- IO.doesFileExist (moduleListFile package)
         if exists then readFile (moduleListFile package) >>= return . Just . read else return Nothing
@@ -70,13 +74,13 @@ main = shakeArgs shakeOptions {shakeThreads = 4} $ do
 
     action (do
         PackageList packages <- apply1 (GetPackageList ())
-        apply (map ExtractedPackage packages) :: Action [()])
+        apply (map GetModulesInPackage packages) :: Action [ModuleList])
 
     rule (\(GetPackageList ()) -> Just (do
         need ["00-index.tar"]
         hackage <- liftIO (readHackage' "00-index.tar")
         let packages = [Package (name,renderVersion version)| name <- M.keys hackage, version <- M.keys (hackage M.! name)]
-        return (PackageList (every 1000 packages))))
+        return (PackageList (every 1 packages))))
 
     rule (\(ExtractedPackage package) -> Just $ do
         liftIO (IO.createDirectoryIfMissing True extractedDirectory)
@@ -92,12 +96,25 @@ main = shakeArgs shakeOptions {shakeThreads = 4} $ do
         system' "gunzip" ["-f","00-index.tar.gz"])
 
     rule (\(GetModulesInPackage package@(Package (name,version))) -> Just $ do
-        let cabalfile = extractedDirectory++packageIdentifier package++"/"++name++".cabal"
+        let packagedirectory = extractedDirectory++packageIdentifier package++"/"
+            cabalfile = packagedirectory++name++".cabal"
         need [cabalfile]
         genericpackagedescription <- liftIO (readPackageDescription silent cabalfile)
-        let packagedescription = finalizePackageDescription
+        let eitherPackagedescription = finalizePackageDescription
                 [] (const True) (Platform I386 Linux) (CompilerId GHC (V.Version [7,6,2] [])) [] genericpackagedescription
-        return (ModulesList []))
+            packagedescription = either (const []) ((:[]).fst) eitherPackagedescription
+            modulenames = packagedescription >>= maybeToList . library >>= libModules
+            sourcedirs = packagedescription >>= maybeToList . library >>= hsSourceDirs . libBuildInfo
+            potentialModules = do
+                name <- modulenames
+                directory <- sourcedirs
+                extension <- [".hs",".lhs"]
+                return (Module (show (disp name),packagedirectory++directory++"/"++toFilePath name++extension))
+            valid (Module (_,path)) = doesFileExist path
+        modules <- filterM valid potentialModules
+        liftIO (IO.createDirectoryIfMissing True (takeDirectory (moduleListFile package)))
+        writeFile' (moduleListFile package) (show (ModuleList modules))
+        return (ModuleList modules))
 
     return ()
 
