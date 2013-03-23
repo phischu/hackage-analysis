@@ -9,6 +9,7 @@ import qualified System.Directory as IO
 import qualified Data.Map as M
 import Data.Maybe
 import Control.Monad
+import Control.DeepSeq
 import Distribution.Text
 import qualified Data.Version as V
 
@@ -35,6 +36,7 @@ newtype GetPackageList = GetPackageList () deriving (Show,Typeable,Eq,Hashable,B
 newtype PackageList = PackageList [Package] deriving (Show,Typeable,Eq,Hashable,Binary,NFData)
 newtype GetModulesInPackage = GetModulesInPackage Package deriving (Show,Typeable,Eq,Hashable,Binary,NFData)
 newtype ModuleList = ModuleList [Module] deriving (Show,Typeable,Eq,Hashable,Binary,NFData,Read)
+newtype CreateModuleListFile = CreateModuleListFile Package deriving (Show,Typeable,Eq,Hashable,Binary,NFData)
 
 instance Rule ExtractedPackage () where
     storedValue (ExtractedPackage (Package (name,version))) = do
@@ -50,9 +52,12 @@ instance Rule GetPackageList PackageList where
     storedValue (GetPackageList ()) = return Nothing
 
 instance Rule GetModulesInPackage ModuleList where
-    storedValue (GetModulesInPackage package) = do
+    storedValue (GetModulesInPackage package) = return Nothing
+
+instance Rule CreateModuleListFile () where
+    storedValue (CreateModuleListFile package) = do
         exists <- IO.doesFileExist (moduleListFile package)
-        if exists then readFile (moduleListFile package) >>= return . Just . read else return Nothing
+        if exists then return (Just ()) else return Nothing
 
 packageIdentifier :: Package -> String
 packageIdentifier (Package (name,version)) = name++"-"++version
@@ -74,7 +79,7 @@ main = shakeArgs shakeOptions {shakeThreads = 4} $ do
 
     action (do
         PackageList packages <- apply1 (GetPackageList ())
-        apply (map GetModulesInPackage packages) :: Action [ModuleList])
+        apply (map CreateModuleListFile packages) :: Action [ModuleList])
 
     rule (\(GetPackageList ()) -> Just (do
         need ["00-index.tar"]
@@ -112,9 +117,12 @@ main = shakeArgs shakeOptions {shakeThreads = 4} $ do
                 return (Module (show (disp name),packagedirectory++directory++"/"++toFilePath name++extension))
             valid (Module (_,path)) = doesFileExist path
         modules <- filterM valid potentialModules
-        liftIO (IO.createDirectoryIfMissing True (takeDirectory (moduleListFile package)))
-        writeFile' (moduleListFile package) (show (ModuleList modules))
         return (ModuleList modules))
+
+    rule (\(CreateModuleListFile package) -> Just $ do
+        liftIO (IO.createDirectoryIfMissing True (takeDirectory (moduleListFile package)))
+        modulelist <- apply1 (GetModulesInPackage package) :: Action ModuleList
+        writeFile' (moduleListFile package) (show modulelist))
 
     return ()
 
