@@ -51,11 +51,8 @@ instance Rule PackageArchive () where
 instance Rule GetPackageList PackageList where
     storedValue (GetPackageList ()) = return Nothing
 
-instance Rule GetModulesInPackage ModuleList where
-    storedValue (GetModulesInPackage package) = return Nothing
-
-instance Rule CreateModuleListFile () where
-    storedValue (CreateModuleListFile package) = do
+instance Rule GetModulesInPackage () where
+    storedValue (GetModulesInPackage package) = do
         exists <- IO.doesFileExist (moduleListFile package)
         if exists then return (Just ()) else return Nothing
 
@@ -79,7 +76,7 @@ main = shakeArgs shakeOptions {shakeThreads = 4} $ do
 
     action (do
         PackageList packages <- apply1 (GetPackageList ())
-        apply (map CreateModuleListFile packages) :: Action [ModuleList])
+        apply (map GetModulesInPackage packages) :: Action [()])
 
     rule (\(GetPackageList ()) -> Just (do
         need ["00-index.tar"]
@@ -87,14 +84,22 @@ main = shakeArgs shakeOptions {shakeThreads = 4} $ do
         let packages = [Package (name,renderVersion version)| name <- M.keys hackage, version <- M.keys (hackage M.! name)]
         return (PackageList (every 1 packages))))
 
-    rule (\(ExtractedPackage package) -> Just $ do
-        liftIO (IO.createDirectoryIfMissing True extractedDirectory)
-        () <- apply1 (PackageArchive package)
-        system' "tar" ["xzf",archiveDirectory package,"-C",extractedDirectory])
+    rule (\(ExtractedPackage package@(Package (name,version))) -> Just $ do
+        exists <- liftIO (IO.doesDirectoryExist (extractedDirectory++name++"-"++version))
+        if exists
+            then return ()
+            else do
+                    liftIO (IO.createDirectoryIfMissing True extractedDirectory)
+                    () <- apply1 (PackageArchive package)
+                    system' "tar" ["xzf",archiveDirectory package,"-C",extractedDirectory])
 
     rule (\(PackageArchive package) -> Just $ do
-        liftIO (IO.createDirectoryIfMissing True (takeDirectory (archiveDirectory package)))
-        system' "wget" ["-nv","-O",archiveDirectory package,packageUrl package])
+        exists <- liftIO (IO.doesFileExist (archiveDirectory package))
+        if exists
+            then return ()
+            else do
+                    liftIO (IO.createDirectoryIfMissing True (takeDirectory (archiveDirectory package)))
+                    system' "wget" ["-nv","-O",archiveDirectory package,packageUrl package])
 
     "00-index.tar" *> (\out -> do
         system' "wget" ["-nv","hackage.haskell.org/packages/archive/00-index.tar.gz"]
@@ -110,19 +115,17 @@ main = shakeArgs shakeOptions {shakeThreads = 4} $ do
             packagedescription = either (const []) ((:[]).fst) eitherPackagedescription
             modulenames = packagedescription >>= maybeToList . library >>= libModules
             sourcedirs = packagedescription >>= maybeToList . library >>= hsSourceDirs . libBuildInfo
-            potentialModules = do
-                name <- modulenames
+            modulepaths = map toFilePath modulenames
+            modulestrings = map (show.disp) modulenames
+            potentialModules = deepseq modulepaths (deepseq modulestrings (deepseq sourcedirs (do
+                (name,path) <- zip modulestrings modulepaths
                 directory <- sourcedirs
                 extension <- [".hs",".lhs"]
-                return (Module (show (disp name),packagedirectory++directory++"/"++toFilePath name++extension))
+                return (Module (name,packagedirectory++directory++"/"++path++extension)))))
             valid (Module (_,path)) = doesFileExist path
-        modules <- filterM valid potentialModules
-        return (ModuleList modules))
-
-    rule (\(CreateModuleListFile package) -> Just $ do
+        modules <- deepseq potentialModules (filterM valid potentialModules)
         liftIO (IO.createDirectoryIfMissing True (takeDirectory (moduleListFile package)))
-        modulelist <- apply1 (GetModulesInPackage package) :: Action ModuleList
-        writeFile' (moduleListFile package) (show modulelist))
+        writeFile' (moduleListFile package) (show (ModuleList modules)))
 
     return ()
 
