@@ -9,7 +9,8 @@ import qualified System.Directory as IO
 import qualified Data.Map as M
 import Data.Maybe
 import Control.Monad
-import Control.DeepSeq
+import Control.Error
+import Control.Exception.Base
 import Distribution.Text
 import qualified Data.Version as V
 
@@ -76,7 +77,7 @@ main = shakeArgs shakeOptions {shakeThreads = 4} $ do
 
     action (do
         PackageList packages <- apply1 (GetPackageList ())
-        apply (map GetModulesInPackage packages) :: Action [()])
+        liftIO (mapM createModuleList packages))
 
     rule (\(GetPackageList ()) -> Just (do
         need ["00-index.tar"]
@@ -109,23 +110,8 @@ main = shakeArgs shakeOptions {shakeThreads = 4} $ do
         let packagedirectory = extractedDirectory++packageIdentifier package++"/"
             cabalfile = packagedirectory++name++".cabal"
         need [cabalfile]
-        genericpackagedescription <- liftIO (readPackageDescription silent cabalfile)
-        let eitherPackagedescription = finalizePackageDescription
-                [] (const True) (Platform I386 Linux) (CompilerId GHC (V.Version [7,6,2] [])) [] genericpackagedescription
-            packagedescription = either (const []) ((:[]).fst) eitherPackagedescription
-            modulenames = packagedescription >>= maybeToList . library >>= libModules
-            sourcedirs = packagedescription >>= maybeToList . library >>= hsSourceDirs . libBuildInfo
-            modulepaths = map toFilePath modulenames
-            modulestrings = map (show.disp) modulenames
-            potentialModules = deepseq modulepaths (deepseq modulestrings (deepseq sourcedirs (do
-                (name,path) <- zip modulestrings modulepaths
-                directory <- sourcedirs
-                extension <- [".hs",".lhs"]
-                return (Module (name,packagedirectory++directory++"/"++path++extension)))))
-            valid (Module (_,path)) = doesFileExist path
-        modules <- deepseq potentialModules (filterM valid potentialModules)
-        liftIO (IO.createDirectoryIfMissing True (takeDirectory (moduleListFile package)))
-        writeFile' (moduleListFile package) (show (ModuleList modules)))
+        liftIO (createModuleList package))
+        
 
     return ()
 
@@ -141,8 +127,37 @@ addtags :: [String] -> String -> String
 addtags [] s = s
 addtags (x:xs) s = addtags xs (s++"-"++x)
 
+data NoModuleListReason = ConfigureFailure |
+                          NoLibrary |
+                          IOFailure IOException deriving Show
 
+configurePackage :: Package -> IO (Either () PackageDescription)
+configurePackage package@(Package (name,version)) = do
+    let packagedirectory = extractedDirectory++packageIdentifier package++"/"
+        cabalfile = packagedirectory++name++".cabal"
+    genericpackagedescription <- readPackageDescription silent cabalfile
+    let eitherpackagedescription = finalizePackageDescription
+            [] (const True) (Platform I386 Linux) (CompilerId GHC (V.Version [7,6,2] [])) [] genericpackagedescription
+    return (fmapL (const ()) (fmapR fst (eitherpackagedescription)))
 
+createModuleList :: Package -> IO ()
+createModuleList package@(Package (name,version)) = do
+    modulelist <- runEitherT $ do
+        packagedescription <- fmapLT (const ConfigureFailure) (EitherT (configurePackage package))
+        librarysection <- noteT NoLibrary (hoistMaybe (library packagedescription))
+        let modulenames = libModules librarysection
+            sourcedirs = hsSourceDirs (libBuildInfo librarysection)
+            potentialModules = do
+                    name <- modulenames
+                    directory <- sourcedirs
+                    extension <- [".hs",".lhs"]
+                    let packagedirectory = extractedDirectory++packageIdentifier package++"/"
+                    return (Module (show (disp name),packagedirectory++directory++"/"++toFilePath name++extension))
+            valid (Module (_,path)) = IO.doesFileExist path
+        modules <- liftIO (filterM valid potentialModules)
+        return (ModuleList modules)
+    IO.createDirectoryIfMissing True (takeDirectory (moduleListFile package))
+    writeFile (moduleListFile package) (show modulelist)
 
 
 
