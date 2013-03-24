@@ -77,7 +77,7 @@ main = shakeArgs shakeOptions {shakeThreads = 4} $ do
 
     action (do
         PackageList packages <- apply1 (GetPackageList ())
-        liftIO (mapM createModuleList packages))
+        apply (map GetModulesInPackage packages) :: Action [()])
 
     rule (\(GetPackageList ()) -> Just (do
         need ["00-index.tar"]
@@ -129,7 +129,7 @@ addtags (x:xs) s = addtags xs (s++"-"++x)
 
 data NoModuleListReason = ConfigureFailure |
                           NoLibrary |
-                          IOFailure IOException deriving Show
+                          IOFailure IOException deriving (Show,Eq)
 
 configurePackage :: Package -> IO (Either () PackageDescription)
 configurePackage package@(Package (name,version)) = do
