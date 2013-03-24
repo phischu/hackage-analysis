@@ -42,6 +42,7 @@ newtype CreateModuleList = CreateModuleList Package deriving (Show,Typeable,Eq,H
 newtype ModuleList = ModuleList [Module] deriving (Show,Typeable,Eq,Hashable,Binary,NFData,Read)
 newtype GetAST = GetAST (Package,Module) deriving (Show,Typeable,Eq,Hashable,Binary,NFData)
 newtype CreatePackageList = CreatePackageList () deriving (Show,Typeable,Eq,Hashable,Binary,NFData)
+newtype RunMasterPipe = RunMasterPipe () deriving (Show,Typeable,Eq,Hashable,Binary,NFData)
 
 instance Rule ExtractedPackage () where
     storedValue (ExtractedPackage (Package (name,version))) = do
@@ -65,6 +66,9 @@ instance Rule CreatePackageList () where
     storedValue _  = do
         exists <- IO.doesFileExist "packages.list"
         if exists then return (Just ()) else return Nothing
+
+instance Rule RunMasterPipe () where
+    storedValue _ = return Nothing
 
 instance Rule GetAST () where
     storedValue = undefined
@@ -94,7 +98,8 @@ main = shakeArgs shakeOptions {shakeThreads = 4} $ do
     action (do
         PackageList packages <- apply1 (GetPackageList ())
         apply (map ExtractedPackage packages) :: Action [()]
-        apply1 (CreatePackageList ()) :: Action ())
+        apply1 (CreatePackageList ()) :: Action ()
+        apply1 (RunMasterPipe ()) :: Action ())
 
     rule (\(GetPackageList ()) -> Just (do
         need ["00-index.tar"]
@@ -132,6 +137,8 @@ main = shakeArgs shakeOptions {shakeThreads = 4} $ do
             cabalfile = packagedirectory++name++".cabal"
         need [cabalfile]
         liftIO (createModuleList package))
+
+    rule (\(RunMasterPipe ()) -> Just (liftIO MasterPipe.masterpipe))
 
     rule (\(GetAST (package,modul))-> Just $ do
         return ())

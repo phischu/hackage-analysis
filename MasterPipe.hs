@@ -58,6 +58,7 @@ saveConfigurations () = runIdentityP $ forever $ do
     if exists
         then respond (package,configuration)
         else do
+                createDirectoryIfMissing True path
                 lift (writeFile path (show configuration))
                 respond (package,configuration)
 
