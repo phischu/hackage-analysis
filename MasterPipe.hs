@@ -24,9 +24,7 @@ import qualified Data.Version as V (Version(Version))
 masterpipe :: IO ()
 masterpipe = runSafeIO $ runProxy $ runEitherK $
     packages >->
-    tryK configurations >->
-    tryK modules >->
-    tryK asts
+    tryK (loadConfigurations >-> leftD configurations >-> mapD (either id id) >-> saveConfigurations)
 
 data Package = Package Name Version FilePath deriving (Show,Read,Eq)
 type Name = String
@@ -37,6 +35,31 @@ packages = readFileS "packages.list" >-> mapD read
 
 data Configuration = Configuration (Either NoModulesReason ([Module],CPPOptions)) deriving (Show,Read)
 data NoModulesReason = ConfigureFailure | NoLibrary deriving (Show,Read)
+
+loadConfigurations :: (Proxy p,CheckP p) => () -> Pipe p Package (Either Package (Package,Configuration)) IO ()
+loadConfigurations () = runIdentityP $ forever $ do
+    package <- request ()
+    let path = configurationpath package
+    exists <- lift (doesFileExist path)
+    if exists
+        then do
+                configuration <- fmap read (lift (readFile path))
+                respond (Right (package,configuration))
+        else respond (Left package)
+
+configurationpath :: Package -> FilePath
+configurationpath (Package name version _) = "Configurations/" ++ name ++ "-" ++ version ++ ".configuration"
+
+saveConfigurations :: (Proxy p,CheckP p) => () -> Pipe p (Package,Configuration) (Package,Configuration) IO ()
+saveConfigurations () = runIdentityP $ forever $ do
+    (package,configuration) <- request ()
+    let path = configurationpath package
+    exists <- lift (doesFileExist path)
+    if exists
+        then respond (package,configuration)
+        else do
+                lift (writeFile path (show configuration))
+                respond (package,configuration)
 
 configurations :: (Proxy p,CheckP p) => () -> Pipe p Package (Package,Configuration) IO ()
 configurations () = runIdentityP $ forever $ do
