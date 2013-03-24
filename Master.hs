@@ -23,6 +23,8 @@ import Distribution.PackageDescription.Configuration
 import Distribution.System
 import Distribution.Compiler
 
+import qualified MasterPipe
+
 
 newtype Package = Package (Name,Version) deriving (Show,Typeable,Eq,Hashable,Binary,NFData)
 type Name = String
@@ -39,6 +41,7 @@ newtype GetModulesInPackage = GetModulesInPackage Package deriving (Show,Typeabl
 newtype CreateModuleList = CreateModuleList Package deriving (Show,Typeable,Eq,Hashable,Binary,NFData)
 newtype ModuleList = ModuleList [Module] deriving (Show,Typeable,Eq,Hashable,Binary,NFData,Read)
 newtype GetAST = GetAST (Package,Module) deriving (Show,Typeable,Eq,Hashable,Binary,NFData)
+newtype CreatePackageList = CreatePackageList () deriving (Show,Typeable,Eq,Hashable,Binary,NFData)
 
 instance Rule ExtractedPackage () where
     storedValue (ExtractedPackage (Package (name,version))) = do
@@ -56,6 +59,11 @@ instance Rule GetPackageList PackageList where
 instance Rule CreateModuleList () where
     storedValue (CreateModuleList package) = do
         exists <- IO.doesFileExist (moduleListFile package)
+        if exists then return (Just ()) else return Nothing
+
+instance Rule CreatePackageList () where
+    storedValue _  = do
+        exists <- IO.doesFileExist "packages.list"
         if exists then return (Just ()) else return Nothing
 
 instance Rule GetAST () where
@@ -76,13 +84,17 @@ moduleListFile package = "ModuleLists/"++packageIdentifier package++".modulelist
 packageUrl :: Package -> String
 packageUrl (Package (name,version)) = concat ["hackage.haskell.org/packages/archive/",name,"/",version,"/",name,"-",version,".tar.gz"]
 
+convertPackage :: Package -> MasterPipe.Package
+convertPackage (package@(Package (name,version))) = MasterPipe.Package name version path where
+    path = extractedDirectory ++ packageIdentifier package ++ "/"
+
 main :: IO ()
 main = shakeArgs shakeOptions {shakeThreads = 4} $ do
 
     action (do
         PackageList packages <- apply1 (GetPackageList ())
         apply (map ExtractedPackage packages) :: Action [()]
-        apply (map CreateModuleList packages) :: Action [()])
+        apply1 (CreatePackageList ()) :: Action ())
 
     rule (\(GetPackageList ()) -> Just (do
         need ["00-index.tar"]
@@ -110,6 +122,10 @@ main = shakeArgs shakeOptions {shakeThreads = 4} $ do
     "00-index.tar" *> (\out -> do
         system' "wget" ["-nv","hackage.haskell.org/packages/archive/00-index.tar.gz"]
         system' "gunzip" ["-f","00-index.tar.gz"])
+
+    rule (\(CreatePackageList ()) -> Just $ do
+        PackageList packages <- apply1 (GetPackageList ())
+        writeFileLines "packages.list" (map (show . convertPackage) packages))
 
     rule (\(CreateModuleList package@(Package (name,version))) -> Just $ do
         let packagedirectory = extractedDirectory++packageIdentifier package++"/"
