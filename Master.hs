@@ -36,8 +36,9 @@ newtype PackageArchive = PackageArchive Package deriving (Show,Typeable,Eq,Hasha
 newtype GetPackageList = GetPackageList () deriving (Show,Typeable,Eq,Hashable,Binary,NFData)
 newtype PackageList = PackageList [Package] deriving (Show,Typeable,Eq,Hashable,Binary,NFData)
 newtype GetModulesInPackage = GetModulesInPackage Package deriving (Show,Typeable,Eq,Hashable,Binary,NFData)
+newtype CreateModuleList = CreateModuleList Package deriving (Show,Typeable,Eq,Hashable,Binary,NFData)
 newtype ModuleList = ModuleList [Module] deriving (Show,Typeable,Eq,Hashable,Binary,NFData,Read)
-newtype CreateModuleListFile = CreateModuleListFile Package deriving (Show,Typeable,Eq,Hashable,Binary,NFData)
+newtype GetAST = GetAST (Package,Module) deriving (Show,Typeable,Eq,Hashable,Binary,NFData)
 
 instance Rule ExtractedPackage () where
     storedValue (ExtractedPackage (Package (name,version))) = do
@@ -52,10 +53,13 @@ instance Rule PackageArchive () where
 instance Rule GetPackageList PackageList where
     storedValue (GetPackageList ()) = return Nothing
 
-instance Rule GetModulesInPackage () where
-    storedValue (GetModulesInPackage package) = do
+instance Rule CreateModuleList () where
+    storedValue (CreateModuleList package) = do
         exists <- IO.doesFileExist (moduleListFile package)
         if exists then return (Just ()) else return Nothing
+
+instance Rule GetAST () where
+    storedValue = undefined
 
 packageIdentifier :: Package -> String
 packageIdentifier (Package (name,version)) = name++"-"++version
@@ -77,7 +81,8 @@ main = shakeArgs shakeOptions {shakeThreads = 4} $ do
 
     action (do
         PackageList packages <- apply1 (GetPackageList ())
-        apply (map GetModulesInPackage packages) :: Action [()])
+        apply (map ExtractedPackage packages) :: Action [()]
+        apply (map CreateModuleList packages) :: Action [()])
 
     rule (\(GetPackageList ()) -> Just (do
         need ["00-index.tar"]
@@ -106,11 +111,14 @@ main = shakeArgs shakeOptions {shakeThreads = 4} $ do
         system' "wget" ["-nv","hackage.haskell.org/packages/archive/00-index.tar.gz"]
         system' "gunzip" ["-f","00-index.tar.gz"])
 
-    rule (\(GetModulesInPackage package@(Package (name,version))) -> Just $ do
+    rule (\(CreateModuleList package@(Package (name,version))) -> Just $ do
         let packagedirectory = extractedDirectory++packageIdentifier package++"/"
             cabalfile = packagedirectory++name++".cabal"
         need [cabalfile]
         liftIO (createModuleList package))
+
+    rule (\(GetAST (package,modul))-> Just $ do
+        return ())
         
 
     return ()

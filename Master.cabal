@@ -16,18 +16,16 @@ cabal-version:       >=1.10
 
 executable Master
   main-is:             Master.hs
-  other-modules:       ExtractPackageList,
-                       DownloadPackages,
-                       DownloadPackage,
-                       ExtractPackages,
-                       ExtractPackage
+  other-modules:       MasterPipe
   build-depends:       base,
                        hackage-db,
                        containers,
                        Cabal,
                        shake,
                        directory,
-                       errors
+                       errors,
+                       pipes,
+                       pipes-safe
   default-language:    Haskell2010
   ghc-options:         -rtsopts -threaded -auto-all -caf-all
 
