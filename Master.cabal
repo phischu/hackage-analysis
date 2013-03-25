@@ -26,7 +26,8 @@ executable Master
                        filepath,
                        errors,
                        pipes,
-                       pipes-safe
+                       pipes-safe,
+                       haskell-src-exts
   default-language:    Haskell2010
   ghc-options:         -rtsopts -threaded -auto-all -caf-all
 

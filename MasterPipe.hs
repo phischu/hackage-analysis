@@ -21,11 +21,25 @@ import Distribution.Text (disp)
 import Distribution.ModuleName (toFilePath)
 import qualified Data.Version as V (Version(Version))
 
+import Language.Haskell.Exts (parseFileWithMode)
+import Language.Haskell.Exts.Fixity (baseFixities)
+import Language.Haskell.Exts.Parser (ParseMode(..),defaultParseMode,ParseResult(ParseOk,ParseFailed))
+import qualified Language.Haskell.Exts.Syntax as AST
+
 
 masterpipe :: IO ()
 masterpipe = runSafeIO $ runProxy $ runEitherK $
     packages >->
-    tryK (loadConfigurations >-> leftD configurations >-> mapD (either id id) >-> saveConfigurations)
+    tryK (memoPipe loadConfigurations configurations saveConfigurations) >->
+    tryK modules >->
+    tryK (memoPipe loadASTs asts saveASTs)
+
+memoPipe :: (Proxy p,ListT p,Monad m) =>
+            (() -> Pipe p a (Either a b) m ()) ->
+            (() -> Pipe p a b m ()) ->
+            (() -> Pipe p b b m ()) ->
+            (() -> Pipe p a b m ())
+memoPipe load work save = load >-> leftD work >-> mapD (either id id) >-> save
 
 data Package = Package Name Version FilePath deriving (Show,Read,Eq)
 type Name = String
@@ -96,11 +110,22 @@ modules () = runIdentityP $ forever $ do
     (package,Configuration configuration) <- request ()
     case configuration of
         Left _ -> return ()
-        Right (modules,cppoptions) -> forM_ modules (\ modul ->respond (package,modul,cppoptions))
+        Right (modules,cppoptions) -> forM_ modules (\modul->respond (package,modul,cppoptions))
 
-data AST = AST
+loadASTs :: (Proxy p,CheckP p) => () -> Pipe p (Package,Module,CPPOptions) (Either (Package,Module,CPPOptions) (Package,Module,AST.Module)) IO ()
+loadASTs = mapD Left
 
-asts :: (Proxy p,CheckP p) => () -> Pipe p (Package,Module,CPPOptions) (Package,Module,AST) IO ()
-asts = undefined
+asts :: (Proxy p,CheckP p) => () -> Pipe p (Package,Module,CPPOptions) (Package,Module,AST.Module) IO ()
+asts () = runIdentityP $ forever $ do
+    (package,modul,cppoptions) <- request ()
+    let Module _ path = modul
+        mode = defaultParseMode {parseFilename = path, fixities = Just baseFixities}
+    parseresult <- lift (parseFileWithMode mode path)
+    case parseresult of
+        ParseFailed _ _ -> return ()
+        ParseOk ast -> respond (package,modul,ast)
+
+saveASTs :: (Proxy p,CheckP p) => () -> Pipe p (Package,Module,AST.Module) (Package,Module,AST.Module) IO ()
+saveASTs = idT
 
 
