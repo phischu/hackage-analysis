@@ -4,7 +4,7 @@ import Control.Proxy
 import Control.Proxy.Safe
 import Control.Proxy.Safe.Prelude
 
-import Control.Monad (filterM,when)
+import Control.Monad (filterM,when,forM_)
 import System.Directory (doesFileExist,createDirectoryIfMissing)
 import System.FilePath
 
@@ -92,7 +92,11 @@ data Module = Module Name FilePath deriving (Show,Read)
 data CPPOptions = CPPOptions [String] deriving (Show,Read)
 
 modules :: (Proxy p,CheckP p,Monad m) => () -> Pipe p (Package,Configuration) (Package,Module,CPPOptions) m ()
-modules = undefined
+modules () = runIdentityP $ forever $ do
+    (package,Configuration configuration) <- request ()
+    case configuration of
+        Left _ -> return ()
+        Right (modules,cppoptions) -> forM_ modules (\ modul ->respond (package,modul,cppoptions))
 
 data AST = AST
 
