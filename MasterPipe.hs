@@ -4,8 +4,9 @@ import Control.Proxy
 import Control.Proxy.Safe
 import Control.Proxy.Safe.Prelude
 
-import Control.Monad (filterM)
-import System.Directory (doesFileExist)
+import Control.Monad (filterM,when)
+import System.Directory (doesFileExist,createDirectoryIfMissing)
+import System.FilePath
 
 import Distribution.PackageDescription
     (PackageDescription(..),Library(..),libModules,BuildInfo(..),
@@ -55,12 +56,10 @@ saveConfigurations () = runIdentityP $ forever $ do
     (package,configuration) <- request ()
     let path = configurationpath package
     exists <- lift (doesFileExist path)
-    if exists
-        then respond (package,configuration)
-        else do
-                createDirectoryIfMissing True path
-                lift (writeFile path (show configuration))
-                respond (package,configuration)
+    when (not exists) (do
+        lift (createDirectoryIfMissing True (dropFileName path))
+        lift (writeFile path (show configuration)))
+    respond (package,configuration)
 
 configurations :: (Proxy p,CheckP p) => () -> Pipe p Package (Package,Configuration) IO ()
 configurations () = runIdentityP $ forever $ do

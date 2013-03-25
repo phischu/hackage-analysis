@@ -23,6 +23,7 @@ executable Master
                        Cabal,
                        shake,
                        directory,
+                       filepath,
                        errors,
                        pipes,
                        pipes-safe
