@@ -77,7 +77,7 @@ main = shakeArgs shakeOptions {shakeThreads = 4} $ do
         need ["00-index.tar"]
         hackage <- liftIO (readHackage' "00-index.tar")
         let packages = [Package (name,renderVersion version)| name <- M.keys hackage, version <- M.keys (hackage M.! name)]
-        return (PackageList (every 1 packages))))
+        return (PackageList (every 1000 packages))))
 
     rule (\(ExtractedPackage package@(Package (name,version))) -> Just $ do
         exists <- liftIO (IO.doesDirectoryExist (extractedDirectory++name++"-"++version))

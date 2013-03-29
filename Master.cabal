@@ -27,7 +27,9 @@ executable Master
                        errors,
                        pipes,
                        pipes-safe,
-                       haskell-src-exts
+                       haskell-src-exts,
+                       bytestring,
+                       aeson
   default-language:    Haskell2010
   ghc-options:         -rtsopts -threaded -auto-all -caf-all
 
