@@ -32,13 +32,16 @@ import GHC.Generics
 import qualified Data.ByteString.Lazy as BS
 import Data.Aeson.Generic
 
+type Stats = Integer
 
 masterpipe :: IO ()
-masterpipe = runSafeIO $ runProxy $ runEitherK $
-    packages >->
-    tryK (memoPipe loadConfigurations configurations saveConfigurations) >->
-    tryK modules >->
-    mapP (memoPipe loadASTs asts saveASTs)
+masterpipe = do
+    result <- trySafeIO $ flip runStateT 0 $ runProxy $ runEitherK $
+        raiseK packages >->
+        raiseK (tryK (memoPipe loadConfigurations configurations saveConfigurations)) >->
+        raiseK (tryK modules) >->
+        raiseK (mapP (memoPipe loadASTs asts saveASTs))
+    writeFile "result.txt" (show result)
 
 memoPipe :: (Proxy p,ListT p,Monad m) =>
             (() -> Pipe p a (Either a b) m ()) ->
