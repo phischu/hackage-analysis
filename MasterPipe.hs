@@ -32,15 +32,25 @@ import GHC.Generics
 import qualified Data.ByteString.Lazy as BS
 import Data.Aeson.Generic
 
-type Stats = Integer
+import Control.Monad.State.Strict (runStateT,modify,get)
+
+data Stats = Stats {
+    numberOfPackagesFound :: !Integer,
+    numberOfPackagesConsidered :: !Integer,
+    numberOfModulesFound :: !Integer,
+    numberOfModulesParsed :: !Integer
+    } deriving Show
+
+emptyStats = Stats 0 0 0 0
 
 masterpipe :: IO ()
 masterpipe = do
-    result <- trySafeIO $ flip runStateT 0 $ runProxy $ runEitherK $
-        raiseK packages >->
+    result <- trySafeIO $ flip runStateT emptyStats $ runProxy $ runEitherK $
+        raiseK packages >-> countPackagesFound >->
         raiseK (tryK (memoPipe loadConfigurations configurations saveConfigurations)) >->
-        raiseK (tryK modules) >->
-        raiseK (mapP (memoPipe loadASTs asts saveASTs))
+        countPackagesConsidered >->
+        raiseK (tryK modules) >-> countModulesFound >->
+        raiseK (mapP (memoPipe loadASTs asts saveASTs)) >-> countModulesParsed >-> printProgress
     writeFile "result.txt" (show result)
 
 memoPipe :: (Proxy p,ListT p,Monad m) =>
@@ -120,34 +130,7 @@ modules () = runIdentityP $ forever $ do
     case configuration of
         Left _ -> return ()
         Right (modules,cppoptions) -> forM_ modules (\modul->respond (package,modul,cppoptions))
-{-
-deriving instance Generic AST.Module
-deriving instance Generic AST.Decl
-deriving instance Generic AST.ImportDecl
-deriving instance Generic AST.Annotation
-deriving instance Generic AST.ExportSpec
-deriving instance Generic AST.ImportSpec
-deriving instance Generic AST.Activation
-deriving instance Generic AST.Exp
-deriving instance Generic AST.WarningText
-deriving instance Generic AST.Rule
-deriving instance Generic AST.ModuleName
-deriving instance Generic AST.CName
-deriving instance Generic AST.XAttr
-instance FromJSON AST.Module
-instance FromJSON AST.Decl
-instance FromJSON AST.ImportDecl
-instance FromJSON AST.Annotation
-instance FromJSON AST.ExportSpec
-instance FromJSON AST.ImportSpec
-instance FromJSON AST.Activation
-instance FromJSON AST.Exp
-instance FromJSON AST.WarningText
-instance FromJSON AST.Rule
-instance FromJSON AST.ModuleName
-instance FromJSON AST.CName
-instance FromJSON AST.XAttr
--}
+
 loadASTs :: (Proxy p,CheckP p) => () -> Pipe p (Package,Module,CPPOptions) (Either (Package,Module,CPPOptions) (Package,Module,AST.Module)) SafeIO ()
 loadASTs () = runIdentityP $ forever $ void $ runEitherP $  do
     (package,modul,cppoptions) <- request ()
@@ -193,5 +176,39 @@ saveASTs () = runIdentityP $ forever $ void $ runEitherP $ do
         tryIO (BS.writeFile path (encode ast)))
     respond (package,modul,ast)
 
+countPackagesFound :: (Proxy p) => () -> Pipe (ExceptionP p) Package Package (StateT Stats SafeIO) r
+countPackagesFound () = forever $ do
+    x <- request ()
+    lift (modify (\stats->stats {numberOfPackagesFound = numberOfPackagesFound stats + 1}))
+    respond x
+
+countPackagesConsidered :: (Proxy p) => () -> Pipe (ExceptionP p) (Package,Configuration) (Package,Configuration) (StateT Stats SafeIO) r
+countPackagesConsidered () = forever $ do
+    x <- request ()
+    case x of
+        (_,Configuration (Left _)) -> return ()
+        (_,Configuration (Right _)) -> lift (modify (\stats->stats {numberOfPackagesConsidered = numberOfPackagesConsidered stats + 1}))
+    respond x
+
+countModulesFound :: (Proxy p) => () -> Pipe (ExceptionP p) (Package,Module,CPPOptions) (Package,Module,CPPOptions) (StateT Stats SafeIO) r
+countModulesFound () = forever $ do
+    x <- request ()
+    lift (modify (\stats->stats {numberOfModulesFound = numberOfModulesFound stats + 1}))
+    respond x
+
+countModulesParsed :: (Proxy p) => () -> Pipe (ExceptionP p) (Package,Module,AST.Module) (Package,Module,AST.Module) (StateT Stats SafeIO) r
+countModulesParsed () = forever $ do
+    x <- request ()
+    lift (modify (\stats->stats {numberOfModulesParsed = numberOfModulesParsed stats + 1}))
+    respond x
+
+printProgress :: (Proxy p) => () -> Pipe (ExceptionP p) x x (StateT Stats SafeIO) r
+printProgress () = forever $ do
+    x <- request ()
+    stats <- lift get
+    if (numberOfModulesParsed stats `mod` 1000 == 0)
+        then raise (tryIO (print stats))
+        else return ()
+    respond x
 
 

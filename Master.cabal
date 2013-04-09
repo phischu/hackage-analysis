@@ -29,7 +29,8 @@ executable Master
                        pipes-safe,
                        haskell-src-exts,
                        bytestring,
-                       aeson
+                       aeson,
+                       mtl
   default-language:    Haskell2010
   ghc-options:         -rtsopts -threaded -auto-all -caf-all
 
