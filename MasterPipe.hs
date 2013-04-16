@@ -8,7 +8,8 @@ import Control.Proxy.Safe.Prelude
 import Control.Monad (filterM,when,forM_,void)
 import System.Directory (doesFileExist,createDirectoryIfMissing)
 import System.FilePath
-import Control.Exception (ErrorCall(ErrorCall))
+import Control.Exception (ErrorCall(ErrorCall),SomeException(SomeException),IOException,evaluate)
+import Control.DeepSeq (force)
 
 import Distribution.PackageDescription
     (PackageDescription(..),Library(..),libModules,BuildInfo(..),
@@ -23,7 +24,10 @@ import Distribution.Text (disp)
 import Distribution.ModuleName (toFilePath)
 import qualified Data.Version as V (Version(Version))
 
-import Language.Haskell.Exts (parseFileWithMode)
+import Language.Preprocessor.Cpphs (runCpphs,defaultCpphsOptions)
+import Data.List (isPrefixOf)
+
+import Language.Haskell.Exts (parseFileContentsWithMode)
 import Language.Haskell.Exts.Fixity (baseFixities)
 import Language.Haskell.Exts.Parser (ParseMode(..),defaultParseMode,ParseResult(ParseOk,ParseFailed))
 import qualified Language.Haskell.Exts.Syntax as AST
@@ -38,10 +42,11 @@ data Stats = Stats {
     numberOfPackagesFound :: !Integer,
     numberOfPackagesConsidered :: !Integer,
     numberOfModulesFound :: !Integer,
-    numberOfModulesParsed :: !Integer
-    } deriving Show
+    numberOfModulesParsed :: !Integer,
+    cppOptionsUsed :: ![(Package,Module,String)]
+    } deriving (Read,Show)
 
-emptyStats = Stats 0 0 0 0
+emptyStats = Stats 0 0 0 0 []
 
 masterpipe :: IO ()
 masterpipe = do
@@ -50,6 +55,7 @@ masterpipe = do
         raiseK (tryK (memoPipe loadConfigurations configurations saveConfigurations)) >->
         countPackagesConsidered >->
         raiseK (tryK modules) >-> countModulesFound >->
+        preprocess >->
         raiseK (mapP (memoPipe loadASTs asts saveASTs)) >-> countModulesParsed >-> printProgress
     writeFile "result.txt" (show result)
 
@@ -131,32 +137,47 @@ modules () = runIdentityP $ forever $ do
         Left _ -> return ()
         Right (modules,cppoptions) -> forM_ modules (\modul->respond (package,modul,cppoptions))
 
-loadASTs :: (Proxy p,CheckP p) => () -> Pipe p (Package,Module,CPPOptions) (Either (Package,Module,CPPOptions) (Package,Module,AST.Module)) SafeIO ()
+preprocess :: (Proxy p) => () -> Pipe (ExceptionP p) (Package,Module,CPPOptions) (Package,Module,String) (StateT Stats SafeIO) r
+preprocess () = forever $ (do
+    (package,modul,_) <- request ()
+    let Module modulename modulepath = modul
+    rawsource <- hoist lift (tryIO (readFile modulepath >>= evaluate . force))
+    let optionsFound = filter isPreprocessorLine (lines rawsource)
+        isPreprocessorLine x = "#ifdef" `isPrefixOf` x ||
+                               "#ifndef" `isPrefixOf` x ||
+                               "#if" `isPrefixOf` x ||
+                               "#elif" `isPrefixOf` x
+        addCppOption x stats = stats {cppOptionsUsed = x:cppOptionsUsed stats}
+    forM_ optionsFound (\option -> lift (modify (addCppOption (package,modul,option))))
+    sourcecode <- hoist lift (tryIO (runCpphs defaultCpphsOptions modulepath rawsource))
+    respond (package,modul,rawsource)) `catch`
+        (\e -> hoist lift (tryIO (print (e :: IOException)))) `catch`
+        (\e -> hoist lift (tryIO (print (e :: ErrorCall))))
+
+loadASTs :: (Proxy p,CheckP p) => () -> Pipe p (Package,Module,String) (Either (Package,Module,String) (Package,Module,AST.Module)) SafeIO ()
 loadASTs () = runIdentityP $ forever $ void $ runEitherP $  do
-    (package,modul,cppoptions) <- request ()
+    (package,modul,sourcecode) <- request ()
     let path = astpath package modul
     exists <- tryIO (doesFileExist path)
     if exists
         then do
                 maybeast <- fmap decode (tryIO (BS.readFile path))
                 case maybeast of
-                    Nothing -> respond (Left (package,modul,cppoptions))
+                    Nothing -> respond (Left (package,modul,sourcecode))
                     Just ast -> respond (Right (package,modul,ast))
-        else respond (Left (package,modul,cppoptions))
+        else respond (Left (package,modul,sourcecode))
 
-asts :: (Proxy p,CheckP p) => () -> Pipe p (Package,Module,CPPOptions) (Package,Module,AST.Module) SafeIO ()
+asts :: (Proxy p,CheckP p) => () -> Pipe p (Package,Module,String) (Package,Module,AST.Module) SafeIO ()
 asts () = runIdentityP $ forever $ void $ runEitherP $ do
-    (package,modul,cppoptions) <- request ()
-    let Package packagename packageversion packagepath = package
-        Module modulename modulepath = modul
+    (package,modul,sourcecode) <- request ()
+    let Module modulename modulepath = modul
         mode = defaultParseMode {parseFilename = modulepath, fixities = Just baseFixities}
     maybeast <- tryIO (do
-        parseresult <- parseFileWithMode mode modulepath
+        parseresult <- return (parseFileContentsWithMode mode sourcecode)
         case parseresult of
             ParseFailed _ _ -> return Nothing
             ParseOk ast -> return (Just ast)) `catch`
                 (\(ErrorCall err)->do
-                    --tryIO (putStrLn (packagename++"-"++modulename++": " ++err))
                     return Nothing)
     case maybeast of
         Nothing -> return ()
@@ -207,7 +228,7 @@ printProgress () = forever $ do
     x <- request ()
     stats <- lift get
     if (numberOfModulesParsed stats `mod` 1000 == 0)
-        then raise (tryIO (print stats))
+        then raise (tryIO (print (stats {cppOptionsUsed = []})))
         else return ()
     respond x
 

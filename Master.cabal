@@ -30,7 +30,9 @@ executable Master
                        haskell-src-exts,
                        bytestring,
                        aeson,
-                       mtl
+                       mtl,
+                       cpphs,
+                       deepseq
   default-language:    Haskell2010
   ghc-options:         -rtsopts -threaded -auto-all -caf-all
 
