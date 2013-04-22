@@ -16,7 +16,8 @@ cabal-version:       >=1.10
 
 executable Master
   main-is:             Master.hs
-  other-modules:       MasterPipe
+  other-modules:       MasterPipe,
+                       Visualization
   build-depends:       base,
                        hackage-db,
                        containers,
