@@ -33,7 +33,8 @@ executable Master
                        aeson,
                        mtl,
                        cpphs,
-                       deepseq
+                       deepseq,
+                       process
   default-language:    Haskell2010
   ghc-options:         -rtsopts -threaded -auto-all -caf-all
 

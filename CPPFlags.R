@@ -1,4 +1,5 @@
 library(wordcloud)
 data <- read.table(file="CPPFlags.data",col.names=c("word","frequency"))
 svg(filename="CPPFlags.svg")
-wordcloud(data$word,data$frequency)
+pal <- brewer.pal(4,"Set1")
+wordcloud(data$word,data$frequency,min.freq=30,random.order=FALSE,colors=pal,random.color=TRUE)

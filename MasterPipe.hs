@@ -36,7 +36,13 @@ import GHC.Generics
 import qualified Data.ByteString.Lazy as BS
 import Data.Aeson.Generic
 
-import Control.Monad.State.Strict (runStateT,modify,get)
+import Control.Monad.State.Strict (execStateT,modify,get)
+
+import Data.Map.Strict (Map,empty,insertWith,toList,delete)
+import qualified Data.Map.Strict as M (map)
+import Data.Set (Set,union,singleton,size)
+import Data.List (foldl')
+import Visualization (cppflags)
 
 data Stats = Stats {
     numberOfPackagesFound :: !Integer,
@@ -50,7 +56,7 @@ emptyStats = Stats 0 0 0 0 []
 
 masterpipe :: IO ()
 masterpipe = do
-    result <- trySafeIO $ flip runStateT emptyStats $ runProxy $ runEitherK $
+    result <- trySafeIO $ flip execStateT emptyStats $ runProxy $ runEitherK $
         raiseK packages >-> countPackagesFound >->
         raiseK (tryK (memoPipe loadConfigurations configurations saveConfigurations)) >->
         countPackagesConsidered >->
@@ -58,6 +64,8 @@ masterpipe = do
         preprocess >->
         raiseK (mapP (memoPipe loadASTs asts saveASTs)) >-> countModulesParsed >-> printProgress
     writeFile "result.txt" (show result)
+    writeOutCPPFlagData result
+    cppflags
 
 memoPipe :: (Proxy p,ListT p,Monad m) =>
             (() -> Pipe p a (Either a b) m ()) ->
@@ -66,7 +74,7 @@ memoPipe :: (Proxy p,ListT p,Monad m) =>
             (() -> Pipe p a b m ())
 memoPipe load work save = load >-> leftD work >-> mapD (either id id) >-> save
 
-data Package = Package Name Version FilePath deriving (Show,Read,Eq)
+data Package = Package Name Version FilePath deriving (Show,Read,Eq,Ord)
 type Name = String
 type Version = String
 
@@ -231,5 +239,16 @@ printProgress () = forever $ do
         then raise (tryIO (print (stats {cppOptionsUsed = []})))
         else return ()
     respond x
+
+writeOutCPPFlagData :: Stats -> IO ()
+writeOutCPPFlagData stats = writeFile "CPPFlags.data" (flagmapToCsv flagmap) where
+    flagmap = foldl' insertFlag empty (cppOptionsUsed stats)
+    insertFlag :: Map String (Set Package) -> (Package,Module,String) -> Map String (Set Package)
+    insertFlag accu (package,_,flag) = insertWith union (stripDefined (stripExclamationMark (extractFlag flag))) (singleton package) accu
+    extractFlag flag = if length (words flag) > 1 then words flag !! 1 else "error finding flag"
+    stripExclamationMark ('!':flag) = flag
+    stripExclamationMark flag = flag
+    stripDefined flag = if "defined(" `isPrefixOf` flag then takeWhile (/= ')') (drop 8 flag) else flag
+    flagmapToCsv = unlines . map (\(k,v)->k++" "++show v) . toList . delete "" . M.map size
 
 
