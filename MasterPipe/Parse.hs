@@ -1,15 +1,41 @@
+{-# LANGUAGE DeriveDataTypeable #-}
 module MasterPipe.Parse where
 
 import MasterPipe.Types
 
 import Control.Proxy (Proxy,Pipe,request,respond)
-import Control.Proxy.Safe (ExceptionP,SafeIO)
+import Control.Proxy.Safe (ExceptionP,SafeIO,tryIO,throw,catch)
 import Control.Monad (forever)
 
+import Control.Exception (Exception,SomeException,toException)
+import Data.Typeable (Typeable)
+
+import Language.Haskell.Exts (parseFileContentsWithMode,SrcLoc)
+import Language.Haskell.Exts.Fixity (baseFixities)
+import Language.Haskell.Exts.Parser (ParseMode(..),defaultParseMode,ParseResult(ParseOk,ParseFailed))
+
 parseD :: (Proxy p) => () -> Pipe (ExceptionP p) (Package,Configuration,Module,String) (Package,Configuration,Module,AST) SafeIO r
-parseD () = forever (do
+parseD () = forever ((do
+
     (package,configuration,modul,sourcecode) <- request ()
-    respond undefined)
+
+    let Module modulename modulepath = modul
+        mode = defaultParseMode {parseFilename = modulepath, fixities = Just baseFixities}
+        parseresult = parseFileContentsWithMode mode sourcecode
+
+    ast <- case parseresult of
+        ParseFailed sourcelocation message -> throw (toException (ParserException sourcelocation message))
+        ParseOk ast -> return ast
+
+    respond (package,configuration,modul,ast))
+
+        `catch`
+
+    (\e -> tryIO (print (e :: SomeException))))
+
+data ParserException = ParserException SrcLoc String deriving (Show,Typeable)
+
+instance Exception ParserException
 
 {-
 loadASTs :: (Proxy p,CheckP p) => () -> Pipe p (Package,Module,String) (Either (Package,Module,String) (Package,Module,AST.Module)) SafeIO ()
