@@ -37,7 +37,9 @@ configureD () = forever ((do
         (configure genericpackagedescription)
 
     respond (package,Configuration flagassignment defaultPlatform defaultCompiler packagedescription))
+
         `catch`
+
     (\e -> tryIO (print (e :: SomeException))))
 
 defaultPlatform :: Platform
