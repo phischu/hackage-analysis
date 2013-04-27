@@ -2,12 +2,13 @@ module MasterPipe.Parse where
 
 import MasterPipe.Types
 
-import Control.Proxy
-import Control.Proxy.Safe
+import Control.Proxy (Proxy,Pipe,request,respond)
+import Control.Proxy.Safe (ExceptionP,SafeIO)
+import Control.Monad (forever)
 
 parseD :: (Proxy p) => () -> Pipe (ExceptionP p) (Package,Configuration,Module,String) (Package,Configuration,Module,AST) SafeIO r
 parseD () = forever (do
-    request ()
+    (package,configuration,modul,sourcecode) <- request ()
     respond undefined)
 
 {-

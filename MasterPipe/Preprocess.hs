@@ -2,13 +2,27 @@ module MasterPipe.Preprocess where
 
 import MasterPipe.Types
 
-import Control.Proxy
-import Control.Proxy.Safe
+import Control.Proxy (Proxy,Pipe,request,respond)
+import Control.Proxy.Safe (ExceptionP,SafeIO,tryIO,catch)
+import Control.Monad (forever)
+
+import Control.Exception (SomeException,evaluate)
+import Control.DeepSeq (force)
+
+import Language.Preprocessor.Cpphs (runCpphs,defaultCpphsOptions)
 
 preprocessD :: (Proxy p) => () -> Pipe (ExceptionP p) (Package,Configuration,Module) (Package,Configuration,Module,String) SafeIO r
-preprocessD () = forever (do
-    request ()
-    respond undefined)
+preprocessD () = forever ((do
+    (package,configuration,modul) <- request ()
+    let Module modulename modulepath = modul
+    rawsource <- tryIO (readFile modulepath)
+    sourcecode <- tryIO (runCpphs defaultCpphsOptions modulepath rawsource)
+    tryIO (evaluate (force sourcecode))
+    respond (package,configuration,modul,sourcecode))
+
+        `catch`
+
+    (\e -> tryIO (print (e :: SomeException))))
 
 {-
 preprocess :: (Proxy p) => () -> Pipe (ExceptionP p) (Package,Module,CPPOptions) (Package,Module,String) (StateT Stats SafeIO) r

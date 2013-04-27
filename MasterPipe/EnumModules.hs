@@ -24,7 +24,7 @@ enummodulesD () = forever ((do
 
     (package,configuration) <- request ()
 
-    let Package _ _ packagepath = package
+    let Package packagename version packagepath = package
         Configuration _ _ _ packagedescription = configuration
 
     librarysection <- maybe
@@ -47,7 +47,7 @@ enummodulesD () = forever ((do
             notfound modules modulename = null (do
                 (Module foundname _) <- modules
                 guard (foundname == show (disp modulename)))
-        throw (toException (NotAllModuleFilesFound modulesnotfound)))
+        throw (toException (NotAllModuleFilesFound package modulesnotfound)))
 
     forM_ modules (\m -> respond (package,configuration,m)))
 
@@ -56,7 +56,7 @@ enummodulesD () = forever ((do
     (\e -> tryIO (print (e :: SomeException))))
 
 data EnumModulesException = NoLibrary
-                          | NotAllModuleFilesFound [ModuleName] deriving (Read,Show,Typeable)
+                          | NotAllModuleFilesFound Package [ModuleName] deriving (Read,Show,Typeable)
 
 instance Exception EnumModulesException
 

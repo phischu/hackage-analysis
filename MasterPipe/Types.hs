@@ -4,6 +4,8 @@ import Distribution.PackageDescription (PackageDescription,FlagAssignment)
 import Distribution.System (Platform)
 import Distribution.Compiler (CompilerId)
 
+import qualified Language.Haskell.Exts.Syntax as AST
+
 
 data Package = Package Name Version FilePath deriving (Show,Read,Eq,Ord)
 type Name = String
@@ -13,5 +15,5 @@ data Configuration = Configuration FlagAssignment Platform CompilerId PackageDes
 
 data Module = Module Name FilePath deriving (Show,Read)
 
-data AST = AST
+type AST = AST.Module
 
