@@ -6,7 +6,9 @@ import Control.Proxy
 import Control.Proxy.Safe
 
 parseD :: (Proxy p) => () -> Pipe (ExceptionP p) (Package,Configuration,Module,String) (Package,Configuration,Module,AST) SafeIO r
-parseD = undefined
+parseD () = forever (do
+    request ()
+    respond undefined)
 
 {-
 loadASTs :: (Proxy p,CheckP p) => () -> Pipe p (Package,Module,String) (Either (Package,Module,String) (Package,Module,AST.Module)) SafeIO ()

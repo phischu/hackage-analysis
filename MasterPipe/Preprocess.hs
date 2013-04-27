@@ -6,7 +6,9 @@ import Control.Proxy
 import Control.Proxy.Safe
 
 preprocessD :: (Proxy p) => () -> Pipe (ExceptionP p) (Package,Configuration,Module) (Package,Configuration,Module,String) SafeIO r
-preprocessD = undefined
+preprocessD () = forever (do
+    request ()
+    respond undefined)
 
 {-
 preprocess :: (Proxy p) => () -> Pipe (ExceptionP p) (Package,Module,CPPOptions) (Package,Module,String) (StateT Stats SafeIO) r

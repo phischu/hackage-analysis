@@ -5,7 +5,7 @@ import MasterPipe.Types
 
 import Control.Proxy (Proxy,Pipe,request,respond)
 import Control.Proxy.Safe (ExceptionP,SafeIO,throw,tryIO,catch)
-import Control.Monad (forever,filterM,forM_,when)
+import Control.Monad (forever,filterM,forM_,when,guard)
 
 import Distribution.PackageDescription
     (PackageDescription(library),
@@ -42,7 +42,12 @@ enummodulesD () = forever ((do
         valid (Module _ path) = doesFileExist path
     modules <- tryIO (filterM valid potentialModules)
 
-    when (length modulenames /= length modules) (throw (toException (NotAllModuleFilesFound modulenames modules)))
+    when (length modulenames /= length modules) (do
+        let modulesnotfound = filter (notfound modules) modulenames
+            notfound modules modulename = null (do
+                (Module foundname _) <- modules
+                guard (foundname == show (disp modulename)))
+        throw (toException (NotAllModuleFilesFound modulesnotfound)))
 
     forM_ modules (\m -> respond (package,configuration,m)))
 
@@ -51,7 +56,7 @@ enummodulesD () = forever ((do
     (\e -> tryIO (print (e :: SomeException))))
 
 data EnumModulesException = NoLibrary
-                          | NotAllModuleFilesFound [ModuleName] [Module] deriving (Read,Show,Typeable)
+                          | NotAllModuleFilesFound [ModuleName] deriving (Read,Show,Typeable)
 
 instance Exception EnumModulesException
 
