@@ -49,6 +49,7 @@ import MasterPipe.Configure (configureD)
 import MasterPipe.EnumModules (enummodulesD)
 import MasterPipe.Preprocess (preprocessD)
 import MasterPipe.Parse (parseD)
+import MasterPipe.Fragment (fragmentD)
 
 masterpipe :: IO ()
 masterpipe = do
@@ -57,5 +58,6 @@ masterpipe = do
         configureD >->
         enummodulesD >->
         preprocessD >->
-        parseD
+        parseD >->
+        fragmentD
 

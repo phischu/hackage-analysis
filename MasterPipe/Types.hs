@@ -17,3 +17,5 @@ data Module = Module Name FilePath deriving (Show,Read)
 
 type AST = AST.Module
 
+data Fragment = FunctionFragment Name
+
