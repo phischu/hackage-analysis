@@ -47,7 +47,7 @@ enummodulesD () = forever ((do
             notfound modules modulename = null (do
                 (Module foundname _) <- modules
                 guard (foundname == show (disp modulename)))
-        throw (toException (NotAllModuleFilesFound package modulesnotfound)))
+        tryIO (print (toException (NotAllModuleFilesFound package modulesnotfound))))
 
     forM_ modules (\m -> respond (package,configuration,m)))
 
