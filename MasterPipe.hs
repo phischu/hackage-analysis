@@ -50,6 +50,7 @@ import MasterPipe.EnumModules (enummodulesD)
 import MasterPipe.Preprocess (preprocessD)
 import MasterPipe.Parse (parseD)
 import MasterPipe.Fragment (fragmentD)
+import MasterPipe.Database (databaseC)
 
 masterpipe :: IO ()
 masterpipe = do
@@ -59,5 +60,6 @@ masterpipe = do
         enummodulesD >->
         preprocessD >->
         parseD >->
-        fragmentD
+        fragmentD >->
+        databaseC
 
