@@ -60,6 +60,5 @@ masterpipe = do
         enummodulesD >->
         preprocessD >->
         parseD >->
-        fragmentD >->
-        databaseC
+        fragmentD
 
