@@ -21,11 +21,13 @@ import qualified Data.Version as V (Version(Version))
 import Control.Exception (Exception,SomeException,toException)
 import Data.Typeable (Typeable)
 
+import Database.Neo4j (Node)
 
-configureD :: (Proxy p) => () -> Pipe (ExceptionP p) Package (Package,Configuration) SafeIO r
+
+configureD :: (Proxy p) => () -> Pipe (ExceptionP p) (Package,Node) (Package,Configuration) SafeIO r
 configureD () = forever ((do
 
-    package <- request ()
+    (package,versionnode) <- request ()
 
     let Package packagename version packagepath = package
         cabalfile = packagepath ++ packagename ++ ".cabal"
