@@ -1,7 +1,8 @@
-{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE DeriveDataTypeable,OverloadedStrings #-}
 module MasterPipe.EnumModules where
 
 import MasterPipe.Types
+import MasterPipe.Database (myCreateNode,myCreateRelationship)
 
 import Control.Proxy (Proxy,Pipe,request,respond)
 import Control.Proxy.Safe (ExceptionP,SafeIO,throw,tryIO,catch)
@@ -19,10 +20,12 @@ import System.Directory (doesFileExist)
 import Control.Exception (Exception,SomeException,toException)
 import Data.Typeable (Typeable)
 
-enummodulesD :: (Proxy p) => () -> Pipe (ExceptionP p) (Package,Configuration,PackageNode,VersionNode,VariantNode) (Package,Configuration,Module) SafeIO r
+import Data.Text (pack)
+
+enummodulesD :: (Proxy p) => () -> Pipe (ExceptionP p) (Package,Configuration,PackageNode,VersionNode,VariantNode) (Package,Configuration,Module,PackageNode,VersionNode,VariantNode,ModuleNode) SafeIO r
 enummodulesD () = forever ((do
 
-    (package,configuration,_,_,_) <- request ()
+    (package,configuration,packagenode,versionnode,variantnode) <- request ()
 
     let Package packagename version packagepath = package
         Configuration _ _ _ packagedescription = configuration
@@ -49,7 +52,11 @@ enummodulesD () = forever ((do
                 guard (foundname == show (disp modulename)))
         tryIO (print (toException (NotAllModuleFilesFound package modulesnotfound))))
 
-    forM_ modules (\m -> respond (package,configuration,m)))
+    forM_ modules (\m -> (do
+        let Module modulename _ = m
+        modulenode <- myCreateNode "modulename" (pack modulename)
+        myCreateRelationship variantnode modulenode "MODULE"
+        respond (package,configuration,m,packagenode,versionnode,variantnode,modulenode))))
 
         `catch`
 

@@ -24,5 +24,6 @@ data Fragment = FunctionFragment Name
 type PackageNode = Node
 type VersionNode = Node
 type VariantNode = Node
+type ModuleNode = Node
 
 
