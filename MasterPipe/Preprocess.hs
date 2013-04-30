@@ -11,10 +11,10 @@ import Control.DeepSeq (force)
 
 import Language.Preprocessor.Cpphs (runCpphs,defaultCpphsOptions)
 
-preprocessD :: (Proxy p) => () -> Pipe (ExceptionP p) (Package,Configuration,Module,PackageNode,VersionNode,VariantNode,ModuleNode) (Package,Configuration,Module,String) SafeIO r
+preprocessD :: (Proxy p) => () -> Pipe (ExceptionP p) (Package,Configuration,Module,ModuleNode) (Package,Configuration,Module,String,ModuleNode) SafeIO r
 preprocessD () = forever ((do
 
-    (package,configuration,modul,_,_,_,_) <- request ()
+    (package,configuration,modul,modulenode) <- request ()
 
     let Module modulename modulepath = modul
 
@@ -22,7 +22,7 @@ preprocessD () = forever ((do
     sourcecode <- tryIO (runCpphs defaultCpphsOptions modulepath rawsource)
     tryIO (evaluate (force sourcecode))
 
-    respond (package,configuration,modul,sourcecode))
+    respond (package,configuration,modul,sourcecode,modulenode))
 
         `catch`
 

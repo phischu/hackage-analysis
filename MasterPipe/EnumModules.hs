@@ -22,10 +22,10 @@ import Data.Typeable (Typeable)
 
 import Data.Text (pack)
 
-enummodulesD :: (Proxy p) => () -> Pipe (ExceptionP p) (Package,Configuration,PackageNode,VersionNode,VariantNode) (Package,Configuration,Module,PackageNode,VersionNode,VariantNode,ModuleNode) SafeIO r
+enummodulesD :: (Proxy p) => () -> Pipe (ExceptionP p) (Package,Configuration,VariantNode) (Package,Configuration,Module,ModuleNode) SafeIO r
 enummodulesD () = forever ((do
 
-    (package,configuration,packagenode,versionnode,variantnode) <- request ()
+    (package,configuration,variantnode) <- request ()
 
     let Package packagename version packagepath = package
         Configuration _ _ _ packagedescription = configuration
@@ -56,7 +56,7 @@ enummodulesD () = forever ((do
         let Module modulename _ = m
         modulenode <- myCreateNode "modulename" (pack modulename)
         myCreateRelationship variantnode modulenode "MODULE"
-        respond (package,configuration,m,packagenode,versionnode,variantnode,modulenode))))
+        respond (package,configuration,m,modulenode))))
 
         `catch`
 

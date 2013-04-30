@@ -27,10 +27,10 @@ import Data.Text (pack)
 import Database.Neo4j (Node)
 
 
-configureD :: (Proxy p) => () -> Pipe (ExceptionP p) (Package,PackageNode,VersionNode) (Package,Configuration,PackageNode,VersionNode,VariantNode) SafeIO r
+configureD :: (Proxy p) => () -> Pipe (ExceptionP p) (Package,VersionNode) (Package,Configuration,VariantNode) SafeIO r
 configureD () = forever ((do
 
-    (package,packagenode,versionnode) <- request ()
+    (package,versionnode) <- request ()
 
     let Package packagename version packagepath = package
         cabalfile = packagepath ++ packagename ++ ".cabal"
@@ -44,7 +44,7 @@ configureD () = forever ((do
     variantnode <- myCreateNode "configuration" (pack (show (defaultPlatform,defaultCompiler,flagAssignment)))
     myCreateRelationship versionnode variantnode "VARIANT"
 
-    respond (package,Configuration flagAssignment defaultPlatform defaultCompiler packagedescription,packagenode,versionnode,variantnode))
+    respond (package,Configuration flagAssignment defaultPlatform defaultCompiler packagedescription,variantnode))
 
         `catch`
 

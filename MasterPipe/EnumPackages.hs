@@ -16,7 +16,7 @@ import Data.Text (pack)
 import Database.Neo4j (Node)
 
 
-enumpackagesS :: (Proxy p) => () -> Producer (ExceptionP p) (Package,PackageNode,VersionNode) SafeIO ()
+enumpackagesS :: (Proxy p) => () -> Producer (ExceptionP p) (Package,VersionNode) SafeIO ()
 enumpackagesS () = ((do
 
     basenode <- myCreateNode "packagename" "base"
@@ -30,17 +30,17 @@ enumpackagesS () = ((do
 
     (\e -> tryIO (print (e :: SomeException))))
 
-createVersion :: (Proxy p) => Node -> () -> Pipe (ExceptionP p) Package (Package,PackageNode,VersionNode) SafeIO ()
+createVersion :: (Proxy p) => Node -> () -> Pipe (ExceptionP p) Package (Package,VersionNode) SafeIO ()
 createVersion basenode () = forever (do
 
     package <- request ()
 
     let Package _ version _ = package
 
-    versionnode <- myCreateNode "versionname" (pack version)
+    versionnode <- myCreateNode (pack "versionname") (pack version)
     myCreateRelationship basenode versionnode "VERSION"
 
-    respond (package,basenode,versionnode))
+    respond (package,versionnode))
 
 
 
