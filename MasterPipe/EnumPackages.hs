@@ -1,23 +1,22 @@
-{-# LANGUAGE DeriveDataTypeable,OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings #-}
 module MasterPipe.EnumPackages where
 
 import MasterPipe.Types
+import MasterPipe.Database (myCreateNode,myCreateRelationship)
 
 import Control.Proxy (Proxy,Producer,Pipe,mapD,filterD,(>->),request,respond)
 import Control.Proxy.Safe (ExceptionP,SafeIO,tryIO,readFileS,catch,throw)
 
 import Control.Monad (forever)
 
-import Control.Exception (Exception,SomeException,toException)
-import Data.Typeable (Typeable)
+import Control.Exception (SomeException)
 
-import Database.Neo4j (Node,createNode,defaultClient,createRelationship)
+import Data.Text (pack)
 
-import Data.Text (Text,pack)
-import Data.Aeson (toJSON)
+import Database.Neo4j (Node)
 
 
-enumpackagesS :: (Proxy p) => () -> Producer (ExceptionP p) (Package,Node) SafeIO ()
+enumpackagesS :: (Proxy p) => () -> Producer (ExceptionP p) (Package,PackageNode,VersionNode) SafeIO ()
 enumpackagesS () = ((do
 
     basenode <- myCreateNode "packagename" "base"
@@ -31,7 +30,7 @@ enumpackagesS () = ((do
 
     (\e -> tryIO (print (e :: SomeException))))
 
-createVersion :: (Proxy p) => Node -> () -> Pipe (ExceptionP p) Package (Package,Node) SafeIO ()
+createVersion :: (Proxy p) => Node -> () -> Pipe (ExceptionP p) Package (Package,PackageNode,VersionNode) SafeIO ()
 createVersion basenode () = forever (do
 
     package <- request ()
@@ -39,17 +38,9 @@ createVersion basenode () = forever (do
     let Package _ version _ = package
 
     versionnode <- myCreateNode "versionname" (pack version)
-    tryIO (createRelationship defaultClient basenode versionnode "VERSION" []) >>= either (throw . toException . Neo4jException) return
+    myCreateRelationship basenode versionnode "VERSION"
 
-    respond (package,versionnode))
+    respond (package,basenode,versionnode))
 
-myCreateNode :: (Proxy p) => Text -> Text -> (ExceptionP p) a' a b' b SafeIO Node
-myCreateNode propertyname propertyvalue =
-    tryIO (createNode defaultClient [(propertyname,toJSON propertyvalue)]) >>=
-    either (throw . toException . Neo4jException) return
-
-data Neo4jException = Neo4jException String deriving (Read,Show,Typeable)
-
-instance Exception Neo4jException
 
 

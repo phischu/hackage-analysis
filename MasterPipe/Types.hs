@@ -6,6 +6,8 @@ import Distribution.Compiler (CompilerId)
 
 import qualified Language.Haskell.Exts.Syntax as AST
 
+import Database.Neo4j (Node)
+
 
 data Package = Package Name Version FilePath deriving (Show,Read,Eq,Ord)
 type Name = String
@@ -18,4 +20,9 @@ data Module = Module Name FilePath deriving (Show,Read)
 type AST = AST.Module
 
 data Fragment = FunctionFragment Name
+
+type PackageNode = Node
+type VersionNode = Node
+type VariantNode = Node
+
 

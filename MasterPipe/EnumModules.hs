@@ -19,10 +19,10 @@ import System.Directory (doesFileExist)
 import Control.Exception (Exception,SomeException,toException)
 import Data.Typeable (Typeable)
 
-enummodulesD :: (Proxy p) => () -> Pipe (ExceptionP p) (Package,Configuration) (Package,Configuration,Module) SafeIO r
+enummodulesD :: (Proxy p) => () -> Pipe (ExceptionP p) (Package,Configuration,PackageNode,VersionNode,VariantNode) (Package,Configuration,Module) SafeIO r
 enummodulesD () = forever ((do
 
-    (package,configuration) <- request ()
+    (package,configuration,_,_,_) <- request ()
 
     let Package packagename version packagepath = package
         Configuration _ _ _ packagedescription = configuration

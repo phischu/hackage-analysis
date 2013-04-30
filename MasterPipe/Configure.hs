@@ -24,10 +24,10 @@ import Data.Typeable (Typeable)
 import Database.Neo4j (Node)
 
 
-configureD :: (Proxy p) => () -> Pipe (ExceptionP p) (Package,Node) (Package,Configuration) SafeIO r
+configureD :: (Proxy p) => () -> Pipe (ExceptionP p) (Package,PackageNode,VersionNode) (Package,Configuration,PackageNode,VersionNode,VariantNode) SafeIO r
 configureD () = forever ((do
 
-    (package,versionnode) <- request ()
+    (package,packagenode,versionnode) <- request ()
 
     let Package packagename version packagepath = package
         cabalfile = packagepath ++ packagename ++ ".cabal"
@@ -38,7 +38,7 @@ configureD () = forever ((do
         return
         (configure genericpackagedescription)
 
-    respond (package,Configuration flagassignment defaultPlatform defaultCompiler packagedescription))
+    respond (package,Configuration flagassignment defaultPlatform defaultCompiler packagedescription,packagenode,versionnode,undefined))
 
         `catch`
 
