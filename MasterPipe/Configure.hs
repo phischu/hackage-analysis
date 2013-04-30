@@ -1,7 +1,8 @@
-{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE DeriveDataTypeable,OverloadedStrings #-}
 module MasterPipe.Configure where
 
 import MasterPipe.Types
+import MasterPipe.Database (myCreateNode,myCreateRelationship)
 
 import Control.Proxy (Proxy,Pipe,request,respond)
 import Control.Proxy.Safe (ExceptionP,SafeIO,tryIO,left,catch)
@@ -21,6 +22,8 @@ import qualified Data.Version as V (Version(Version))
 import Control.Exception (Exception,SomeException,toException)
 import Data.Typeable (Typeable)
 
+import Data.Text (pack)
+
 import Database.Neo4j (Node)
 
 
@@ -33,12 +36,15 @@ configureD () = forever ((do
         cabalfile = packagepath ++ packagename ++ ".cabal"
 
     genericpackagedescription <- tryIO (readPackageDescription silent cabalfile)
-    (packagedescription,flagassignment) <- either
+    (packagedescription,flagAssignment) <- either
         (left.toException.CouldNotSatisfyDependencies package)
         return
         (configure genericpackagedescription)
 
-    respond (package,Configuration flagassignment defaultPlatform defaultCompiler packagedescription,packagenode,versionnode,undefined))
+    variantnode <- myCreateNode "configuration" (pack (show (defaultPlatform,defaultCompiler,flagAssignment)))
+    myCreateRelationship versionnode variantnode "VARIANT"
+
+    respond (package,Configuration flagAssignment defaultPlatform defaultCompiler packagedescription,packagenode,versionnode,variantnode))
 
         `catch`
 
