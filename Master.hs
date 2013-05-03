@@ -13,7 +13,8 @@ import qualified Data.Version as V
 
 import Distribution.Hackage.DB (readHackage')
 
-import qualified MasterPipe (masterpipe,Package(Package))
+import qualified MasterPipe (masterpipe)
+import qualified MasterPipe.Types as MasterPipe (Package(Package))
 
 
 newtype Package = Package (Name,Version) deriving (Show,Typeable,Eq,Hashable,Binary,NFData)
