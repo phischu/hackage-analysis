@@ -26,7 +26,7 @@ executable Master
                        directory,
                        filepath,
                        errors,
-                       pipes,
+                       pipes ==3.3.0,
                        pipes-safe,
                        haskell-src-exts,
                        bytestring,

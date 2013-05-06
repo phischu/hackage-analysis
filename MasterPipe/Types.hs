@@ -6,6 +6,8 @@ import Distribution.Compiler (CompilerId)
 
 import qualified Language.Haskell.Exts.Syntax as AST
 
+import Data.Map.Strict (Map,empty,unionWith)
+import Data.Monoid (Monoid(mempty,mappend))
 
 data Package = Package Name Version FilePath deriving (Show,Read,Eq,Ord)
 type Name = String
@@ -17,5 +19,10 @@ data Module = Module Name FilePath deriving (Show,Read)
 
 type AST = AST.Module
 
-data Fragment = FunctionFragment Name
+data Fragment = FunctionFragment Name deriving (Eq,Show)
 
+newtype PackageTree = PackageTree (Map Name (Map Version (Map String (Map Name [Fragment])))) deriving (Eq,Show)
+
+instance Monoid PackageTree where
+	mempty = PackageTree empty
+	(PackageTree p1) `mappend` (PackageTree p2) = PackageTree (unionWith (unionWith (unionWith (unionWith mappend))) p1 p2)

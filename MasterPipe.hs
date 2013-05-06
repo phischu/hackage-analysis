@@ -4,6 +4,7 @@ module MasterPipe where
 import Control.Proxy
 import Control.Proxy.Safe
 import Control.Proxy.Safe.Prelude
+import Control.Proxy.Trans.Writer
 
 import Control.Monad (filterM,when,forM_,void)
 import System.Directory (doesFileExist,createDirectoryIfMissing)
@@ -54,7 +55,7 @@ import MasterPipe.Database (databaseC)
 
 masterpipe :: IO ()
 masterpipe = do
-    runSafeIO $ runProxy $ runEitherK $
+    result <- trySafeIO $ runProxy $ execWriterK $ runEitherK $
         enumpackagesS >->
         configureD >->
         enummodulesD >->
@@ -62,4 +63,5 @@ masterpipe = do
         parseD >->
         fragmentD >->
         databaseC
+    writeFile "fragmentmap" (show result)
 
