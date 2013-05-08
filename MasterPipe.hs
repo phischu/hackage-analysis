@@ -1,50 +1,19 @@
-{-# LANGUAGE StandaloneDeriving, DeriveGeneric #-}
+{-# LANGUAGE StandaloneDeriving, DeriveGeneric, OverloadedStrings #-}
 module MasterPipe where
 
-import Control.Proxy
-import Control.Proxy.Safe
-import Control.Proxy.Safe.Prelude
-import Control.Proxy.Trans.Writer
+import Control.Proxy (Proxy,(>->),runProxy)
+import Control.Proxy.Safe (trySafeIO)
+import Control.Proxy.Trans.Either (runEitherK)
+import Control.Proxy.Trans.Writer (execWriterK)
 
-import Control.Monad (filterM,when,forM_,void)
-import System.Directory (doesFileExist,createDirectoryIfMissing)
-import System.FilePath
-import Control.Exception (ErrorCall(ErrorCall),SomeException(SomeException),IOException,evaluate)
-import Control.DeepSeq (force)
+import Data.Map.Strict (Map,empty,singleton,elems,traverseWithKey)
+import Control.Monad (forM_)
+import Data.Text (pack)
 
-import Distribution.PackageDescription
-    (PackageDescription(..),Library(..),libModules,BuildInfo(..),
-     FlagAssignment,GenericPackageDescription)
-import Distribution.PackageDescription.Configuration (finalizePackageDescription)
-import Distribution.Package (Dependency)
-import Distribution.Verbosity (silent)
-import Distribution.PackageDescription.Parse (readPackageDescription)
-import Distribution.System (Platform(Platform),Arch(I386),OS(Linux))
-import Distribution.Compiler (CompilerId(CompilerId),CompilerFlavor(GHC))
-import Distribution.Text (disp)
-import Distribution.ModuleName (toFilePath)
-import qualified Data.Version as V (Version(Version))
+import Database.PropertyGraph (PropertyGraph,newVertex,newEdge,VertexId,Label,Key,Value,Properties)
+import Database.PropertyGraph.Neo4jBatch (add,convertPropertyGraphToNeo4jBatch)
 
-import Language.Preprocessor.Cpphs (runCpphs,defaultCpphsOptions)
-import Data.List (isPrefixOf)
-
-import Language.Haskell.Exts (parseFileContentsWithMode)
-import Language.Haskell.Exts.Fixity (baseFixities)
-import Language.Haskell.Exts.Parser (ParseMode(..),defaultParseMode,ParseResult(ParseOk,ParseFailed))
-import qualified Language.Haskell.Exts.Syntax as AST
-
-import GHC.Generics
-import qualified Data.ByteString.Lazy as BS
-import Data.Aeson.Generic
-
-import Control.Monad.State.Strict (execStateT,modify,get)
-
-import Data.Map.Strict (Map,empty,insertWith,toList,delete)
-import qualified Data.Map.Strict as M (map)
-import Data.Set (Set,union,singleton,size)
-import Data.List (foldl')
-import Visualization (cppflags)
-
+import MasterPipe.Types (PackageTree(PackageTree),Name,Version,Fragment(FunctionFragment))
 import MasterPipe.EnumPackages (enumpackagesS)
 import MasterPipe.Configure (configureD)
 import MasterPipe.EnumModules (enummodulesD)
@@ -63,5 +32,48 @@ masterpipe = do
         parseD >->
         fragmentD >->
         databaseC
-    writeFile "fragmentmap" (show result)
+    add "http://localhost:7474" (packageTreeToPropertyGraph result) >>= either print (const (return ()))
+
+packageTreeToPropertyGraph :: PackageTree -> PropertyGraph [VertexId]
+packageTreeToPropertyGraph (PackageTree packagetree) = insertPackages packagetree
+
+insertPackages :: Map Name (Map Version (Map String (Map Name [Fragment]))) -> PropertyGraph [VertexId]
+insertPackages = insertWhatever
+    (\packagename -> singleton "packagename" (pack packagename))
+    insertVersions
+    "VERSION"
+
+insertVersions :: Map Version (Map String (Map Name [Fragment])) -> PropertyGraph [VertexId]
+insertVersions = insertWhatever
+    (\versionname -> singleton "versionname" (pack versionname))
+    insertVariants
+    "VARIANT"
+
+insertVariants :: Map String (Map Name [Fragment]) -> PropertyGraph [VertexId]
+insertVariants = insertWhatever
+    (\configuration -> singleton "configuration" (pack configuration))
+    insertModules
+    "MODULE"
+
+insertModules :: Map Name [Fragment] -> PropertyGraph [VertexId]
+insertModules = insertWhatever
+    (\modulename -> singleton "modulename" (pack modulename))
+    insertFragments
+    "FRAGMENT"
+
+insertFragments :: [Fragment] -> PropertyGraph [VertexId]
+insertFragments = mapM (\(FunctionFragment functionname) ->
+    newVertex (singleton "functionname" (pack functionname)))
+
+insertWhatever :: (k -> Properties) -> (v -> PropertyGraph [VertexId]) -> Label -> Map k v -> PropertyGraph [VertexId]
+insertWhatever f g label = fmap elems . (traverseWithKey (\key value -> do
+    vertexid  <- newVertex (f key)
+    childrenids <- g value
+    forM_ childrenids (\childid -> do
+        newEdge empty label vertexid childid)
+    return vertexid))
+
+
+
+
 
