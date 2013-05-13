@@ -19,9 +19,9 @@ data Module = Module Name FilePath deriving (Show,Read)
 
 type AST = AST.Module
 
-data Fragment = FunctionFragment Name deriving (Eq,Show)
+data Fragment = FunctionFragment Name deriving (Eq,Show,Read)
 
-newtype PackageTree = PackageTree (Map Name (Map Version (Map String (Map Name [Fragment])))) deriving (Eq,Show)
+newtype PackageTree = PackageTree (Map Name (Map Version (Map String (Map Name [Fragment])))) deriving (Eq,Show,Read)
 
 instance Monoid PackageTree where
 	mempty = PackageTree empty

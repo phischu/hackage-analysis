@@ -4,7 +4,7 @@ module MasterPipe where
 import Control.Proxy (Proxy,(>->),runProxy)
 import Control.Proxy.Safe (trySafeIO)
 import Control.Proxy.Trans.Either (runEitherK)
-import Control.Proxy.Trans.Writer (execWriterK)
+import Control.Proxy.Trans.Writer (runWriterK)
 
 import Data.Map.Strict (Map,empty,singleton,elems,traverseWithKey)
 import Control.Monad (forM_)
@@ -24,7 +24,7 @@ import MasterPipe.Database (databaseC)
 
 masterpipe :: IO ()
 masterpipe = do
-    result <- trySafeIO $ runProxy $ execWriterK $ runEitherK $
+    result <- trySafeIO $ runProxy $ runWriterK $ runEitherK $
         enumpackagesS >->
         configureD >->
         enummodulesD >->
@@ -32,7 +32,10 @@ masterpipe = do
         parseD >->
         fragmentD >->
         databaseC
-    add "http://localhost:7474" (packageTreeToPropertyGraph result) >>= either print (const (return ()))
+    case result of
+        (Left e,_) -> print e
+        (Right (),packagetree) ->
+            add "localhost" 7474 (packageTreeToPropertyGraph packagetree) >>= print
 
 packageTreeToPropertyGraph :: PackageTree -> PropertyGraph [VertexId]
 packageTreeToPropertyGraph (PackageTree packagetree) = insertPackages packagetree
