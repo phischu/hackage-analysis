@@ -35,7 +35,7 @@ masterpipe = do
     case result of
         (Left e,_) -> print e
         (Right (),packagetree) ->
-            add "localhost" 7474 (packageTreeToPropertyGraph packagetree) >>= print
+            add "localhost" 7474 (packageTreeToPropertyGraph packagetree) >>= either print (const (return ()))
 
 packageTreeToPropertyGraph :: PackageTree -> PropertyGraph [VertexId]
 packageTreeToPropertyGraph (PackageTree packagetree) = insertPackages packagetree
