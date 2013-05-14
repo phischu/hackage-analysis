@@ -8,10 +8,10 @@ import Control.Monad (forever,forM_,when)
 import Control.Proxy.Trans.Writer (WriterP,tell)
 import Data.Map (Map,singleton)
 
-databaseC :: (Proxy p) => () -> Consumer (ExceptionP (WriterP PackageTree p)) (Package,Configuration,Module,Fragment) SafeIO r
+databaseC :: (Proxy p) => () -> Consumer (ExceptionP (WriterP PackageTree p)) (PackageVersion,Configuration,Module,Fragment) SafeIO r
 databaseC () = forever $ do
 	(package,configuration,modul,fragment) <- request ()
-	let Package packagename version _ = package
+	let PackageVersion packagename version _ = package
 	    Configuration flagassignment platform compilerid _ = configuration
 	    Module modulename _ = modul
 	    fragmentmap = PackageTree (

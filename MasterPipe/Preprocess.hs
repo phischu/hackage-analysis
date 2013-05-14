@@ -11,7 +11,7 @@ import Control.DeepSeq (force)
 
 import Language.Preprocessor.Cpphs (runCpphs,defaultCpphsOptions)
 
-preprocessD :: (Proxy p) => () -> Pipe (ExceptionP p) (Package,Configuration,Module) (Package,Configuration,Module,String) SafeIO r
+preprocessD :: (Proxy p) => () -> Pipe (ExceptionP p) (PackageVersion,Configuration,Module) (PackageVersion,Configuration,Module,String) SafeIO r
 preprocessD () = forever ((do
 
     (package,configuration,modul) <- request ()
@@ -29,7 +29,7 @@ preprocessD () = forever ((do
     (\e -> tryIO (print (e :: SomeException))))
 
 {-
-preprocess :: (Proxy p) => () -> Pipe (ExceptionP p) (Package,Module,CPPOptions) (Package,Module,String) (StateT Stats SafeIO) r
+preprocess :: (Proxy p) => () -> Pipe (ExceptionP p) (PackageVersion,Module,CPPOptions) (PackageVersion,Module,String) (StateT Stats SafeIO) r
 preprocess () = forever $ (do
     (package,modul,_) <- request ()
     let Module modulename modulepath = modul

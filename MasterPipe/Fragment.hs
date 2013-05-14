@@ -10,7 +10,7 @@ import qualified Language.Haskell.Exts as AST (
     Module(Module),ModuleName(ModuleName),Decl(FunBind),
     Match(Match),Name(Ident,Symbol))
 
-fragmentD :: (Proxy p) => () -> Pipe (ExceptionP p) (Package,Configuration,Module,AST) (Package,Configuration,Module,Fragment) SafeIO r
+fragmentD :: (Proxy p) => () -> Pipe (ExceptionP p) (PackageVersion,Configuration,Module,AST) (PackageVersion,Configuration,Module,Fragment) SafeIO r
 fragmentD () = forever (do
 
     (package,configuration,modul,ast) <- request ()

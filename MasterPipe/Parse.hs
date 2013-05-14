@@ -14,7 +14,7 @@ import Language.Haskell.Exts (parseFileContentsWithMode,SrcLoc)
 import Language.Haskell.Exts.Fixity (baseFixities)
 import Language.Haskell.Exts.Parser (ParseMode(..),defaultParseMode,ParseResult(ParseOk,ParseFailed))
 
-parseD :: (Proxy p) => () -> Pipe (ExceptionP p) (Package,Configuration,Module,String) (Package,Configuration,Module,AST) SafeIO r
+parseD :: (Proxy p) => () -> Pipe (ExceptionP p) (PackageVersion,Configuration,Module,String) (PackageVersion,Configuration,Module,AST) SafeIO r
 parseD () = forever ((do
 
     (package,configuration,modul,sourcecode) <- request ()

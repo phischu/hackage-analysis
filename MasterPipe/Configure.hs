@@ -22,12 +22,12 @@ import Control.Exception (Exception,SomeException,toException)
 import Data.Typeable (Typeable)
 
 
-configureD :: (Proxy p) => () -> Pipe (ExceptionP p) Package (Package,Configuration) SafeIO r
+configureD :: (Proxy p) => () -> Pipe (ExceptionP p) PackageVersion (PackageVersion,Configuration) SafeIO r
 configureD () = forever ((do
 
     package <- request ()
 
-    let Package packagename version packagepath = package
+    let PackageVersion packagename version packagepath = package
         cabalfile = packagepath ++ packagename ++ ".cabal"
 
     genericpackagedescription <- tryIO (readPackageDescription silent cabalfile)
@@ -51,7 +51,7 @@ defaultCompiler = CompilerId GHC (V.Version [7,6,2] [])
 configure :: GenericPackageDescription -> Either [Dependency] (PackageDescription,FlagAssignment)
 configure = finalizePackageDescription [] (const True) defaultPlatform defaultCompiler []
 
-data ConfigureException = CouldNotSatisfyDependencies Package [Dependency] deriving (Read,Show,Typeable)
+data ConfigureException = CouldNotSatisfyDependencies PackageVersion [Dependency] deriving (Read,Show,Typeable)
 
 instance Exception ConfigureException
 

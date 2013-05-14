@@ -19,12 +19,12 @@ import System.Directory (doesFileExist)
 import Control.Exception (Exception,SomeException,toException)
 import Data.Typeable (Typeable)
 
-enummodulesD :: (Proxy p) => () -> Pipe (ExceptionP p) (Package,Configuration) (Package,Configuration,Module) SafeIO r
+enummodulesD :: (Proxy p) => () -> Pipe (ExceptionP p) (PackageVersion,Configuration) (PackageVersion,Configuration,Module) SafeIO r
 enummodulesD () = forever ((do
 
     (package,configuration) <- request ()
 
-    let Package packagename version packagepath = package
+    let PackageVersion packagename version packagepath = package
         Configuration _ _ _ packagedescription = configuration
 
     librarysection <- maybe
@@ -56,12 +56,12 @@ enummodulesD () = forever ((do
     (\e -> tryIO (print (e :: SomeException))))
 
 data EnumModulesException = NoLibrary
-                          | NotAllModuleFilesFound Package [ModuleName] deriving (Read,Show,Typeable)
+                          | NotAllModuleFilesFound PackageVersion [Distribution.ModuleName.ModuleName] deriving (Read,Show,Typeable)
 
 instance Exception EnumModulesException
 
 {-
-modules :: (Proxy p,CheckP p,Monad m) => () -> Pipe p (Package,Configuration) (Package,Module,CPPOptions) m ()
+modules :: (Proxy p,CheckP p,Monad m) => () -> Pipe p (PackageVersion,Configuration) (PackageVersion,Module,CPPOptions) m ()
 modules () = runIdentityP $ forever $ do
     (package,Configuration configuration) <- request ()
     case configuration of

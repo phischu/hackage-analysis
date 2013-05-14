@@ -14,7 +14,7 @@ import qualified Data.Version as V
 import Distribution.Hackage.DB (readHackage')
 
 import qualified MasterPipe (masterpipe)
-import qualified MasterPipe.Types as MasterPipe (Package(Package))
+import qualified MasterPipe.Types as MasterPipe (PackageVersion(PackageVersion))
 
 
 newtype Package = Package (Name,Version) deriving (Show,Typeable,Eq,Hashable,Binary,NFData)
@@ -61,8 +61,8 @@ archiveDirectory package = "Archives/"++packageIdentifier package++".tar.gz"
 packageUrl :: Package -> String
 packageUrl (Package (name,version)) = concat ["hackage.haskell.org/packages/archive/",name,"/",version,"/",name,"-",version,".tar.gz"]
 
-convertPackage :: Package -> MasterPipe.Package
-convertPackage (package@(Package (name,version))) = MasterPipe.Package name version path where
+convertPackage :: Package -> MasterPipe.PackageVersion
+convertPackage (package@(Package (name,version))) = MasterPipe.PackageVersion name version path where
     path = extractedDirectory ++ packageIdentifier package ++ "/"
 
 main :: IO ()

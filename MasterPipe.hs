@@ -13,8 +13,9 @@ import Data.Text (pack)
 import Database.PropertyGraph (PropertyGraph,newVertex,newEdge,VertexId,Label,Key,Value,Properties)
 import Database.PropertyGraph.Neo4jBatch (add,convertPropertyGraphToNeo4jBatch)
 
-import MasterPipe.Types (PackageTree(PackageTree),Name,Version,Fragment(FunctionFragment))
+import MasterPipe.Types (PackageTree(PackageTree),PackageName,Version,ModuleName,Fragment(FunctionFragment))
 import MasterPipe.EnumPackages (enumpackagesS)
+import MasterPipe.EnumVersions (enumVersionsD)
 import MasterPipe.Configure (configureD)
 import MasterPipe.EnumModules (enummodulesD)
 import MasterPipe.Preprocess (preprocessD)
@@ -26,6 +27,7 @@ masterpipe :: IO ()
 masterpipe = do
     result <- trySafeIO $ runProxy $ runWriterK $ runEitherK $
         enumpackagesS >->
+        enumVersionsD >->
         configureD >->
         enummodulesD >->
         preprocessD >->
@@ -40,25 +42,25 @@ masterpipe = do
 packageTreeToPropertyGraph :: PackageTree -> PropertyGraph [VertexId]
 packageTreeToPropertyGraph (PackageTree packagetree) = insertPackages packagetree
 
-insertPackages :: Map Name (Map Version (Map String (Map Name [Fragment]))) -> PropertyGraph [VertexId]
+insertPackages :: Map PackageName (Map Version (Map String (Map ModuleName [Fragment]))) -> PropertyGraph [VertexId]
 insertPackages = insertWhatever
     (\packagename -> singleton "packagename" (pack packagename))
     insertVersions
     "VERSION"
 
-insertVersions :: Map Version (Map String (Map Name [Fragment])) -> PropertyGraph [VertexId]
+insertVersions :: Map Version (Map String (Map ModuleName [Fragment])) -> PropertyGraph [VertexId]
 insertVersions = insertWhatever
     (\versionname -> singleton "versionname" (pack versionname))
     insertVariants
     "VARIANT"
 
-insertVariants :: Map String (Map Name [Fragment]) -> PropertyGraph [VertexId]
+insertVariants :: Map String (Map ModuleName [Fragment]) -> PropertyGraph [VertexId]
 insertVariants = insertWhatever
     (\configuration -> singleton "configuration" (pack configuration))
     insertModules
     "MODULE"
 
-insertModules :: Map Name [Fragment] -> PropertyGraph [VertexId]
+insertModules :: Map ModuleName [Fragment] -> PropertyGraph [VertexId]
 insertModules = insertWhatever
     (\modulename -> singleton "modulename" (pack modulename))
     insertFragments

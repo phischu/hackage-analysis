@@ -9,19 +9,23 @@ import qualified Language.Haskell.Exts.Syntax as AST
 import Data.Map.Strict (Map,empty,unionWith)
 import Data.Monoid (Monoid(mempty,mappend))
 
-data Package = Package Name Version FilePath deriving (Show,Read,Eq,Ord)
-type Name = String
+type PackageName = String
+
+data PackageVersion = PackageVersion PackageName Version FilePath deriving (Show,Read,Eq,Ord)
+
 type Version = String
 
 data Configuration = Configuration FlagAssignment Platform CompilerId PackageDescription deriving (Show,Read)
 
-data Module = Module Name FilePath deriving (Show,Read)
+type ModuleName = String
+data Module = Module ModuleName FilePath deriving (Show,Read)
 
 type AST = AST.Module
 
-data Fragment = FunctionFragment Name deriving (Eq,Show,Read)
+type FunctionName = String
+data Fragment = FunctionFragment FunctionName deriving (Eq,Show,Read)
 
-newtype PackageTree = PackageTree (Map Name (Map Version (Map String (Map Name [Fragment])))) deriving (Eq,Show,Read)
+newtype PackageTree = PackageTree (Map PackageName (Map Version (Map String (Map ModuleName [Fragment])))) deriving (Eq,Show,Read)
 
 instance Monoid PackageTree where
 	mempty = PackageTree empty
