@@ -1,10 +1,14 @@
-{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE DeriveDataTypeable, OverloadedStrings #-}
 module MasterPipe.EnumModules where
 
 import MasterPipe.Types
+import MasterPipe.Database
 
-import Control.Proxy (Proxy,Pipe,request,respond)
+import Database.PropertyGraph (PropertyGraph,VertexId)
+
+import Control.Proxy (Proxy,Pipe,request,respond,liftP)
 import Control.Proxy.Safe (ExceptionP,SafeIO,throw,tryIO,catch)
+import Control.Proxy.Trans.State (StateP,modify)
 import Control.Monad (forever,filterM,forM_,when,guard)
 
 import Distribution.PackageDescription
@@ -18,8 +22,9 @@ import System.Directory (doesFileExist)
 
 import Control.Exception (Exception,SomeException,toException)
 import Data.Typeable (Typeable)
+import Data.Text (Text,pack)
 
-enummodulesD :: (Proxy p) => () -> Pipe (ExceptionP p) (PackageVersion,Configuration) (PackageVersion,Configuration,Module) SafeIO r
+enummodulesD :: (Proxy p) => () -> Pipe (ExceptionP (StateP (PropertyGraph VertexId) p)) (PackageVersion,Configuration) (PackageVersion,Configuration,Module) SafeIO r
 enummodulesD () = forever ((do
 
     (package,configuration) <- request ()
@@ -49,7 +54,9 @@ enummodulesD () = forever ((do
                 guard (foundname == show (disp modulename)))
         tryIO (print (toException (NotAllModuleFilesFound package modulesnotfound))))
 
-    forM_ modules (\m -> respond (package,configuration,m)))
+    forM_ modules (\m@(Module modulename modulepath) -> (do
+        liftP (modify (>>= insertModule (pack modulename)))
+        respond (package,configuration,m))))
 
         `catch`
 
@@ -59,6 +66,9 @@ data EnumModulesException = NoLibrary
                           | NotAllModuleFilesFound PackageVersion [Distribution.ModuleName.ModuleName] deriving (Read,Show,Typeable)
 
 instance Exception EnumModulesException
+
+insertModule :: Text -> VertexId -> PropertyGraph VertexId
+insertModule = insertVertex "MODULE" "modulename"
 
 {-
 modules :: (Proxy p,CheckP p,Monad m) => () -> Pipe p (PackageVersion,Configuration) (PackageVersion,Module,CPPOptions) m ()

@@ -1,10 +1,14 @@
-{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE DeriveDataTypeable, OverloadedStrings #-}
 module MasterPipe.Configure where
 
 import MasterPipe.Types
+import MasterPipe.Database
 
-import Control.Proxy (Proxy,Pipe,request,respond)
+import Database.PropertyGraph (PropertyGraph,VertexId)
+
+import Control.Proxy (Proxy,Pipe,request,respond,liftP)
 import Control.Proxy.Safe (ExceptionP,SafeIO,tryIO,left,catch)
+import Control.Proxy.Trans.State (StateP,modify)
 import Control.Monad (forever)
 
 import Distribution.PackageDescription
@@ -21,8 +25,10 @@ import qualified Data.Version as V (Version(Version))
 import Control.Exception (Exception,SomeException,toException)
 import Data.Typeable (Typeable)
 
+import Data.Text (Text,pack)
 
-configureD :: (Proxy p) => () -> Pipe (ExceptionP p) PackageVersion (PackageVersion,Configuration) SafeIO r
+
+configureD :: (Proxy p) => () -> Pipe (ExceptionP (StateP (PropertyGraph VertexId) p)) PackageVersion (PackageVersion,Configuration) SafeIO r
 configureD () = forever ((do
 
     package <- request ()
@@ -35,6 +41,8 @@ configureD () = forever ((do
         (left.toException.CouldNotSatisfyDependencies package)
         return
         (configure genericpackagedescription)
+
+    liftP (modify (>>=insertVariant (pack (show (defaultPlatform,defaultCompiler,flagassignment)))))
 
     respond (package,Configuration flagassignment defaultPlatform defaultCompiler packagedescription))
 
@@ -54,6 +62,9 @@ configure = finalizePackageDescription [] (const True) defaultPlatform defaultCo
 data ConfigureException = CouldNotSatisfyDependencies PackageVersion [Dependency] deriving (Read,Show,Typeable)
 
 instance Exception ConfigureException
+
+insertVariant :: Text -> VertexId -> PropertyGraph VertexId
+insertVariant = insertVertex "VARIANT" "configuration"
 
 
 {-
