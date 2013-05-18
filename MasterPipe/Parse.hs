@@ -3,9 +3,12 @@ module MasterPipe.Parse where
 
 import MasterPipe.Types
 
-import Control.Proxy (Proxy,Pipe,request,respond)
+import Database.PropertyGraph (PropertyGraphT)
+
+import Control.Proxy (Proxy,Pipe,request,respond,lift)
 import Control.Proxy.Safe (ExceptionP,SafeIO,tryIO,throw,catch)
 import Control.Monad (forever)
+import Control.Monad.Morph (hoist)
 
 import Control.Exception (Exception,SomeException,toException)
 import Data.Typeable (Typeable)
@@ -14,7 +17,12 @@ import Language.Haskell.Exts (parseFileContentsWithMode,SrcLoc)
 import Language.Haskell.Exts.Fixity (baseFixities)
 import Language.Haskell.Exts.Parser (ParseMode(..),defaultParseMode,ParseResult(ParseOk,ParseFailed))
 
-parseD :: (Proxy p) => () -> Pipe (ExceptionP p) (PackageVersion,Configuration,Module,String) (PackageVersion,Configuration,Module,AST) SafeIO r
+parseD :: (Proxy p) => () -> Pipe
+    (ExceptionP p)
+    (PackageVersion,Configuration,Module,String)
+    (PackageVersion,Configuration,Module,AST)
+    (PropertyGraphT SafeIO)
+    r
 parseD () = forever ((do
 
     (package,configuration,modul,sourcecode) <- request ()
@@ -31,7 +39,7 @@ parseD () = forever ((do
 
         `catch`
 
-    (\e -> tryIO (print (e :: SomeException))))
+    (\e -> hoist lift (tryIO (print (e :: SomeException)))))
 
 data ParserException = ParserException SrcLoc String deriving (Show,Typeable)
 

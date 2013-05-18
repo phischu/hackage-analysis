@@ -36,7 +36,8 @@ executable Master
                        deepseq,
                        process,
                        property-graph-dsl,
-                       text
+                       text,
+                       mmorph
   default-language:    Haskell2010
   ghc-options:         -rtsopts -threaded -auto-all -caf-all -O2
 

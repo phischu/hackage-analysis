@@ -4,11 +4,12 @@ module MasterPipe.Configure where
 import MasterPipe.Types
 import MasterPipe.Database
 
-import Database.PropertyGraph (PropertyGraph,VertexId)
+import Database.PropertyGraph (PropertyGraphT,VertexId)
 
-import Control.Proxy (Proxy,Pipe,request,respond,liftP)
+import Control.Proxy (Proxy,Pipe,request,respond,liftP,lift)
 import Control.Proxy.Safe (ExceptionP,SafeIO,tryIO,left,catch)
-import Control.Proxy.Trans.State (StateP,modify)
+import Control.Proxy.Trans.State (StateP,get,put)
+import Control.Monad.Morph (hoist)
 import Control.Monad (forever)
 
 import Distribution.PackageDescription
@@ -28,27 +29,34 @@ import Data.Typeable (Typeable)
 import Data.Text (Text,pack)
 
 
-configureD :: (Proxy p) => () -> Pipe (ExceptionP (StateP (PropertyGraph VertexId) p)) PackageVersion (PackageVersion,Configuration) SafeIO r
+configureD :: (Proxy p) => () -> Pipe
+    (ExceptionP (StateP VertexId p))
+    PackageVersion
+    (PackageVersion,Configuration)
+    (PropertyGraphT SafeIO)
+    r
 configureD () = forever ((do
 
     package <- request ()
+    versionvertex <- liftP get
 
     let PackageVersion packagename version packagepath = package
         cabalfile = packagepath ++ packagename ++ ".cabal"
 
-    genericpackagedescription <- tryIO (readPackageDescription silent cabalfile)
+    genericpackagedescription <- hoist lift (tryIO (readPackageDescription silent cabalfile))
     (packagedescription,flagassignment) <- either
         (left.toException.CouldNotSatisfyDependencies package)
         return
         (configure genericpackagedescription)
 
-    liftP (modify (>>=insertVariant (pack (show (defaultPlatform,defaultCompiler,flagassignment)))))
+    variantvertex <- lift (insertVariant (pack (show (defaultPlatform,defaultCompiler,flagassignment))) versionvertex)
 
+    liftP (put variantvertex)
     respond (package,Configuration flagassignment defaultPlatform defaultCompiler packagedescription))
 
         `catch`
 
-    (\e -> tryIO (print (e :: SomeException))))
+    (\e -> hoist lift (tryIO (print (e :: SomeException)))))
 
 defaultPlatform :: Platform
 defaultPlatform = Platform I386 Linux
@@ -63,7 +71,7 @@ data ConfigureException = CouldNotSatisfyDependencies PackageVersion [Dependency
 
 instance Exception ConfigureException
 
-insertVariant :: Text -> VertexId -> PropertyGraph VertexId
+insertVariant :: (Monad m) => Text -> VertexId -> PropertyGraphT m VertexId
 insertVariant = insertVertex "VARIANT" "configuration"
 
 
