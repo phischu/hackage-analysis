@@ -1,4 +1,4 @@
-{-# LANGUAGE DeriveDataTypeable, OverloadedStrings #-}
+{-# LANGUAGE DeriveDataTypeable, OverloadedStrings, StandaloneDeriving #-}
 module MasterPipe.EnumModules where
 
 import MasterPipe.Types
@@ -36,7 +36,7 @@ enummodulesD () = forever ((do
     (package,configuration) <- request ()
     variantvertex <- liftP get
 
-    let PackageVersion packagename version packagepath = package
+    let PackageVersion _ _ packagepath = package
         Configuration _ _ _ packagedescription = configuration
 
     librarysection <- maybe
@@ -46,43 +46,43 @@ enummodulesD () = forever ((do
 
     let modulenames = libModules librarysection
         sourcedirs = hsSourceDirs (libBuildInfo librarysection)
-        potentialModules = do
-            modulename <- modulenames
+
+        potentialPaths modulename = do
             directory <- sourcedirs
             extension <- [".hs",".lhs"]
-            return (Module (show (disp modulename)) (packagepath ++ directory ++ "/" ++ toFilePath modulename ++ extension))
-        valid (Module _ path) = doesFileExist path
-    modules <- hoist lift (tryIO (filterM valid potentialModules))
+            return (packagepath ++ directory ++ "/" ++ toFilePath modulename ++ extension)
 
-    when (length modulenames /= length modules) (do
-        let modulesnotfound = filter (notfound modules) modulenames
-            notfound modules modulename = null (do
-                (Module foundname _) <- modules
-                guard (foundname == show (disp modulename)))
-        hoist lift (tryIO (print (toException (NotAllModuleFilesFound package modulesnotfound)))))
+        valid path = doesFileExist path
 
-    forM_ modules (\m@(Module modulename modulepath) -> (do
-        modulevertex <- lift (insertModule (pack modulename) variantvertex)
-        liftP (put modulevertex)
-        respond (package,configuration,m))))
+        findPaths modulename = hoist lift (tryIO (filterM valid (potentialPaths modulename)))
+
+    forM_ modulenames (\modulename -> do
+
+        paths <- findPaths modulename
+        let modulenamestring = (show (disp modulename))
+        modulevertex <- lift (insertModule (pack modulenamestring) variantvertex)
+
+        case paths of
+
+            [] -> lift (insertException (pack "module not found") modulevertex) >> return ()
+
+            [modulepath] -> do
+                liftP (put modulevertex)
+                respond (package,configuration,Module modulenamestring modulepath)
+
+            _ -> lift (insertException (pack "module found at multiple paths") modulevertex >> return ())))
 
         `catch`
 
     (\e -> hoist lift (tryIO (print (e :: SomeException)))))
 
-data EnumModulesException = NoLibrary
-                          | NotAllModuleFilesFound PackageVersion [Distribution.ModuleName.ModuleName] deriving (Read,Show,Typeable)
+data EnumModulesException = NoLibrary deriving (Read,Show,Typeable)
 
 instance Exception EnumModulesException
 
 insertModule :: (Monad m) => Text -> VertexId -> PropertyGraphT m VertexId
 insertModule = insertVertex "MODULE" "modulename"
 
-{-
-modules :: (Proxy p,CheckP p,Monad m) => () -> Pipe p (PackageVersion,Configuration) (PackageVersion,Module,CPPOptions) m ()
-modules () = runIdentityP $ forever $ do
-    (package,Configuration configuration) <- request ()
-    case configuration of
-        Left _ -> return ()
-        Right (modules,cppoptions) -> forM_ modules (\modul->respond (package,modul,cppoptions))
--}
+insertException :: (Monad m) => Text -> VertexId -> PropertyGraphT m VertexId
+insertException = insertVertex "MODULEEXCEPTION" "exception"
+
