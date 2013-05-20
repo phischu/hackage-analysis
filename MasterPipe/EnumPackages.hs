@@ -28,7 +28,7 @@ enumpackagesS () = (do
 
 	let packagenames = nub (map (\(PackageVersion packagename _ _) -> packagename) packagelist)
 
-	forM_ packagenames (\packagename -> do
+	forM_ (every 100 packagenames) (\packagename -> do
 	    packagevertex <- lift (insertVertex "PACKAGE" "packagename" (pack packagename) rootvertex)
 	    liftP (put packagevertex)
 	    respond packagename)
@@ -37,4 +37,6 @@ enumpackagesS () = (do
 
     (\e -> hoist lift (tryIO (print (e :: SomeException)))))
 
-
+every :: Int -> [a] -> [a]
+every nth [] = []
+every nth xs = head xs : every nth (drop nth xs)

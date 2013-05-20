@@ -33,13 +33,16 @@ parseD () = forever ((do
 
     let Module modulename modulepath = modul
         mode = defaultParseMode {parseFilename = modulepath, fixities = Just baseFixities}
-        parseresult = parseFileContentsWithMode mode sourcecode
 
-    ast <- case parseresult of
-        ParseFailed sourcelocation message -> throw (toException (ParserException sourcelocation message))
-        ParseOk ast -> return ast
+    eitherast <- hoist lift (tryIO (do
+        parseresult <- return (parseFileContentsWithMode mode sourcecode)
+        case parseresult of
+            ParseFailed sourcelocation message -> return (Left (ParserException sourcelocation message))
+            ParseOk ast -> return (Right ast)))
 
-    respond (package,configuration,modul,ast))
+    case eitherast of
+        Left parserexception -> throw parserexception
+        Right ast -> respond (package,configuration,modul,ast))
 
         `catch`
 
