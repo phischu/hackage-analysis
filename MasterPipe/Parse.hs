@@ -1,24 +1,28 @@
-{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE DeriveDataTypeable, OverloadedStrings #-}
 module MasterPipe.Parse where
 
 import MasterPipe.Types
 
-import Database.PropertyGraph (PropertyGraphT)
+import Database.PropertyGraph (PropertyGraphT,VertexId)
 
-import Control.Proxy (Proxy,Pipe,request,respond,lift)
+import MasterPipe.Database (insertVertex)
+
+import Control.Proxy (Proxy,Pipe,request,respond,lift,liftP)
 import Control.Proxy.Safe (ExceptionP,SafeIO,tryIO,throw,catch)
-import Control.Monad (forever)
+import Control.Proxy.Trans.State (StateP,get)
+import Control.Monad (forever,void)
 import Control.Monad.Morph (hoist)
 
 import Control.Exception (Exception,SomeException,toException)
 import Data.Typeable (Typeable)
+import Data.Text (pack)
 
 import Language.Haskell.Exts (parseFileContentsWithMode,SrcLoc)
 import Language.Haskell.Exts.Fixity (baseFixities)
 import Language.Haskell.Exts.Parser (ParseMode(..),defaultParseMode,ParseResult(ParseOk,ParseFailed))
 
 parseD :: (Proxy p) => () -> Pipe
-    (ExceptionP p)
+    (ExceptionP (StateP VertexId p))
     (PackageVersion,Configuration,Module,String)
     (PackageVersion,Configuration,Module,AST)
     (PropertyGraphT SafeIO)
@@ -39,7 +43,9 @@ parseD () = forever ((do
 
         `catch`
 
-    (\e -> hoist lift (tryIO (print (e :: SomeException)))))
+    (\e -> do
+        modulevertex <- liftP get
+        void (lift (insertVertex "PARSEREXCEPTION" "exception" (pack (show (e :: SomeException))) modulevertex))))
 
 data ParserException = ParserException SrcLoc String deriving (Show,Typeable)
 
