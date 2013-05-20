@@ -5,7 +5,6 @@ import MasterPipe.Types
 import MasterPipe.Database
 
 import Database.PropertyGraph (PropertyGraphT,VertexId)
-import Database.PropertyGraph.Internal (VertexId(VertexId))
 
 import Control.Proxy (Proxy,Pipe,request,respond,liftP,lift)
 import Control.Proxy.Safe (ExceptionP,SafeIO,throw,tryIO,catch)
@@ -41,7 +40,7 @@ enummodulesD () = forever ((do
         Configuration _ _ _ packagedescription = configuration
 
     librarysection <- maybe
-        (throw (toException (NoLibrary variantvertex)))
+        (throw (toException NoLibrary))
         return
         (library packagedescription)
 
@@ -75,15 +74,15 @@ enummodulesD () = forever ((do
 
         `catch`
 
-    (\(NoLibrary variantvertex) -> void (lift (insertVertex "VARIANTEXCEPTION" "exception" "no library" variantvertex)))
+    (\NoLibrary -> do
+        variantvertex <- liftP get
+        void (lift (insertVertex "VARIANTEXCEPTION" "exception" "no library" variantvertex)))
 
         `catch`
 
     (\e -> hoist lift (tryIO (print (e :: SomeException)))))
 
-data EnumModulesException = NoLibrary VertexId deriving (Show,Typeable)
-
-deriving instance Show VertexId
+data EnumModulesException = NoLibrary deriving (Show,Typeable)
 
 instance Exception EnumModulesException
 
