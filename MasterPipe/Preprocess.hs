@@ -46,7 +46,7 @@ preprocessD () = forever ((do
 
     (\e -> do
         modulevertex <- liftP get
-        void (lift (insertVertex "PREPROCESSEXCEPTION" "exception" (pack (show (e :: SomeException))) modulevertex))))
+        void (lift (insertVertex "PREPROCESSOREXCEPTION" "exception" (pack (show (e :: SomeException))) modulevertex))))
 
 {-
 preprocess :: (Proxy p) => () -> Pipe (ExceptionP p) (PackageVersion,Module,CPPOptions) (PackageVersion,Module,String) (StateT Stats SafeIO) r
