@@ -1,21 +1,29 @@
+{-# LANGUAGE OverloadedStrings #-}
 module MasterPipe.Preprocess where
 
 import MasterPipe.Types
 
+import MasterPipe.Database (insertVertex)
+
 import Database.PropertyGraph (PropertyGraphT,VertexId)
 
-import Control.Proxy (Proxy,Pipe,request,respond,lift)
+import Control.Proxy (Proxy,Pipe,request,respond,lift,liftP)
 import Control.Proxy.Safe (ExceptionP,SafeIO,tryIO,catch)
-import Control.Monad (forever)
+import Control.Proxy.Trans.State (StateP,get)
+import Control.Monad (forever,void)
 import Control.Monad.Morph (hoist)
 
 import Control.Exception (SomeException,evaluate)
 import Control.DeepSeq (force)
+import Data.Text (pack)
 
-import Language.Preprocessor.Cpphs (runCpphs,defaultCpphsOptions)
+import Language.Preprocessor.Cpphs
+    (runCpphs,
+    defaultCpphsOptions,CpphsOptions(boolopts),
+    defaultBoolOptions,BoolOptions(warnings))
 
 preprocessD :: (Proxy p) => () -> Pipe
-    (ExceptionP p)
+    (ExceptionP (StateP VertexId p))
     (PackageVersion,Configuration,Module)
     (PackageVersion,Configuration,Module,String)
     (PropertyGraphT SafeIO)
@@ -24,17 +32,21 @@ preprocessD () = forever ((do
 
     (package,configuration,modul) <- request ()
 
-    let Module modulename modulepath = modul
+    let Module _ modulepath = modul
+        cpphsoptions = defaultCpphsOptions {boolopts = booloptions}
+        booloptions = defaultBoolOptions {warnings = False}
 
     rawsource <- hoist lift (tryIO (readFile modulepath))
-    sourcecode <- hoist lift (tryIO (runCpphs defaultCpphsOptions modulepath rawsource))
+    sourcecode <- hoist lift (tryIO (runCpphs cpphsoptions modulepath rawsource))
     hoist lift (tryIO (evaluate (force sourcecode)))
 
     respond (package,configuration,modul,sourcecode))
 
         `catch`
 
-    (\e -> hoist lift (tryIO (print (e :: SomeException)))))
+    (\e -> do
+        modulevertex <- liftP get
+        void (lift (insertVertex "PREPROCESSEXCEPTION" "exception" (pack (show (e :: SomeException))) modulevertex))))
 
 {-
 preprocess :: (Proxy p) => () -> Pipe (ExceptionP p) (PackageVersion,Module,CPPOptions) (PackageVersion,Module,String) (StateT Stats SafeIO) r
