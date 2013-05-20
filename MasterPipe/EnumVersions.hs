@@ -7,19 +7,20 @@ import MasterPipe.Database
 import Database.PropertyGraph (PropertyGraphT,VertexId,newVertex,newEdge)
 
 import Control.Proxy (Proxy,Pipe,request,respond,lift,liftP)
-import Control.Proxy.Safe (ExceptionP,SafeIO,tryIO)
+import Control.Proxy.Safe (ExceptionP,SafeIO,tryIO,catch)
 import Control.Proxy.Trans.State (StateP,get,put)
 import Control.Monad.Morph (hoist)
 
 import Control.Monad (forever,forM_,void)
+import Control.Exception (SomeException)
 import Data.Text (Text,pack)
 import Data.Map (empty,fromList)
 
 import Data.Version (Version(Version),parseVersion,showVersion)
-import Text.ParserCombinators.ReadP (ReadP,readP_to_S)
+import Text.ParserCombinators.ReadP (readP_to_S)
 
 enumVersionsD :: (Proxy p) => () -> Pipe (ExceptionP (StateP VertexId p)) PackageName PackageVersion (PropertyGraphT SafeIO) r
-enumVersionsD () = forever (do
+enumVersionsD () = forever ((do
 
     packagename <- request ()
     packagevertex <- liftP get
@@ -32,7 +33,7 @@ enumVersionsD () = forever (do
         let PackageVersion _ versionname _ = packageversion
             versionparses = readP_to_S parseVersion versionname
 
-        case versionparses of
+        case filter (null.snd) versionparses of
 
             [(Version (v1:v2:rest) tags,"")] -> do
 
@@ -54,7 +55,9 @@ enumVersionsD () = forever (do
                     (pack ("version parse failed: "++versionname))
                     packagevertex)))))
 
+        `catch`
 
+    (\e -> hoist lift (tryIO (print (e::SomeException)))))
 
 
 insertVersion :: (Monad m) => Text -> Text -> Text -> VertexId -> PropertyGraphT m VertexId

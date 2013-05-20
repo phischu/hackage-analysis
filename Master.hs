@@ -77,7 +77,7 @@ main = shakeArgs shakeOptions {shakeThreads = 4} $ do
     rule (\(GetPackageList ()) -> Just (do
         need ["00-index.tar"]
         hackage <- liftIO (readHackage' "00-index.tar")
-        let packages = [Package (name,renderVersion version)| name <- M.keys hackage, version <- M.keys (hackage M.! name)]
+        let packages = [Package (name,V.showVersion version)| name <- M.keys hackage, version <- M.keys (hackage M.! name)]
         return (PackageList (every 1 packages))))
 
     rule (\(ExtractedPackage package@(Package (name,version))) -> Just $ do
@@ -110,12 +110,6 @@ every :: Int -> [a] -> [a]
 every nth [] = []
 every nth xs = head xs : every nth (drop nth xs)
 
-renderVersion :: V.Version -> String
-renderVersion version@(V.Version branch tags) = addtags tags (show (disp version))
-
-addtags :: [String] -> String -> String
-addtags [] s = s
-addtags (x:xs) s = addtags xs (s++"-"++x)
 
 
 
