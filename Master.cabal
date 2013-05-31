@@ -41,4 +41,18 @@ executable Master
   default-language:    Haskell2010
   ghc-options:         -rtsopts -threaded -auto-all -caf-all -O2
 
-
+executable ChangeDiagram
+  main-is:             Queries/ChangeDiagram.hs
+  -- other-modules:       
+  build-depends:       base,
+                       pipes,
+                       pipes-safe,
+                       pipes-gremlin,
+                       aeson,
+                       neo4j-haskell,
+                       diagrams-svg,
+                       diagrams-lib,
+                       blaze-svg,
+                       bytestring
+  default-language:    Haskell2010
+  ghc-options:         -rtsopts -threaded -auto-all -caf-all -O2
