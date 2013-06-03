@@ -35,13 +35,17 @@ main = do
     			    BS.writeFile ("ChangeDiagrams/"++packagename++".svg") (renderSvg dia))
     		Error e -> print e)
 
+unsafeFromJSON :: (FromJSON a) => Value -> a
+unsafeFromJSON value = case fromJSON value of
+	Success x -> x
+	Error e -> error (show e)
 
-numberOfChanges :: [(Versionname,[(Modulename,Functionname)])] -> [(Double,Double,Double)]
+numberOfChanges :: [(Versionname,[(Modulename,Functionname)])] -> [(String,(Double,Double,Double))]
 numberOfChanges [] = []
 numberOfChanges [_] = []
-numberOfChanges (version1:version2:rest) = (kepts,addeds,removeds):numberOfChanges (version2:rest) where
+numberOfChanges (version1:version2:rest) = (unsafeFromJSON versionname2,(kepts,addeds,removeds)):numberOfChanges (version2:rest) where
     (_,names1) = version1
-    (_,names2) = version2
+    (versionname2,names2) = version2
     kepts = fromIntegral (length (intersect names1 names2))
     addeds = fromIntegral (length (names2 \\ names1))
     removeds = fromIntegral (length (names1 \\ names2))
@@ -88,14 +92,11 @@ versionChain version1 = do
         [version2] -> versionChain version2 >>= return . (version2:)
         _ -> error "two next versions"
 
-changeDiagram :: [(Double,Double,Double)] -> Diagram SVG R2
-changeDiagram values = hcat (map (\(x,y,z) -> bar x y z) values) # pad 1.2
+changeDiagram :: [(String,(Double,Double,Double))] -> Diagram SVG R2
+changeDiagram values = hcat (map bar values) # pad 1.2
 
-addeds = [2,0,2,8,0,0]
-kepts  = [8,13,4,9,20,20]
-removeds = [1,1,2,0,0,5]
-
-bar kept added removed = removedRect `below` (addedRect `above` keptRect `above` strutX 1) where
+bar :: (String,(Double,Double,Double)) -> Diagram SVG R2
+bar (versionname,(kept,added,removed)) = removedRect `below` (addedRect `above` keptRect `above` strutX 1) where
     removedRect = minibar red removed
     keptRect    = minibar blue kept
     addedRect   = minibar green added
