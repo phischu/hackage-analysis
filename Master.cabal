@@ -32,12 +32,15 @@ executable Master
                        bytestring,
                        aeson,
                        mtl,
+                       transformers,
                        cpphs,
                        deepseq,
                        process,
                        property-graph-dsl,
+                       neo4j-haskell,
                        text,
-                       mmorph
+                       mmorph,
+                       free
   default-language:    Haskell2010
   ghc-options:         -rtsopts -threaded -auto-all -caf-all -O2
 
