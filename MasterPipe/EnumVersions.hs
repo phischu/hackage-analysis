@@ -13,6 +13,7 @@ import Control.Monad.Morph (hoist)
 import Control.Monad (forever,forM,forM_,guard)
 import Control.Exception (SomeException)
 import Data.Text (Text,pack)
+import qualified Data.Aeson as JSON (Value(String))
 import Data.Map (empty,fromList)
 import Data.List (sortBy)
 import Data.Function (on)
@@ -64,9 +65,9 @@ enumVersionsD () = forever ((do
 insertVersion :: (Monad m) => Text -> Text -> Text -> VertexId -> PropertyGraphT m VertexId
 insertVersion versionname majorversion minorversion packagevertex = do
     versionvertex <- newVertex (fromList [
-        ("versionname" ,versionname),
-        ("majorversion",majorversion),
-        ("minorversion",minorversion)])
+        ("versionname" ,JSON.String versionname),
+        ("majorversion",JSON.String majorversion),
+        ("minorversion",JSON.String minorversion)])
     newEdge empty "VERSION" packagevertex versionvertex
     return versionvertex
 
