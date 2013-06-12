@@ -14,8 +14,7 @@ import Control.Exception (throw)
 import Data.Map.Strict (empty)
 
 import Database.PropertyGraph (newVertex)
-import Database.PropertyGraph.Neo4jSingle (runPropertyGraphT)
-import Database.Neo4j (defaultClient)
+import Database.PropertyGraph.Neo4jBatch (runPropertyGraphT)
 
 import MasterPipe.Types (PackageTree(PackageTree),PackageName,Version,ModuleName,Fragment(FunctionFragment))
 import MasterPipe.EnumPackages (enumpackagesS)
@@ -28,7 +27,7 @@ import MasterPipe.Fragment (fragmentD)
 
 masterpipe :: IO ()
 masterpipe = do
-    result <- runEitherT $ runPropertyGraphT defaultClient $ hoist trySafeIO $ runProxy $ evalStateK undefined $ runEitherK $
+    result <- runPropertyGraphT "localhost" 7474 10000 $ hoist trySafeIO $ runProxy $ evalStateK undefined $ runEitherK $
         enumpackagesS >->
         enumVersionsD >->
         configureD >->

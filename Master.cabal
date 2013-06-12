@@ -36,7 +36,7 @@ executable Master
                        cpphs,
                        deepseq,
                        process,
-                       property-graph-dsl,
+                       property-graph-dsl >=0.7,
                        neo4j-haskell,
                        text,
                        mmorph,
