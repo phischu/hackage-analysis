@@ -22,8 +22,10 @@ data Module = Module ModuleName FilePath deriving (Show,Read)
 
 type AST = AST.Module
 
-type FunctionName = String
-data Fragment = FunctionFragment FunctionName deriving (Eq,Show,Read)
+type FragmentName = String
+data Fragment = ValueFragment FragmentName
+              | TypeFragment FragmentName
+              | ClassFragment FragmentName deriving (Eq,Show,Read)
 
 newtype PackageTree = PackageTree (Map PackageName (Map Version (Map String (Map ModuleName [Fragment])))) deriving (Eq,Show,Read)
 

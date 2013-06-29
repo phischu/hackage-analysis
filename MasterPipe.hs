@@ -16,7 +16,7 @@ import Data.Map.Strict (empty)
 import Database.PropertyGraph (newVertex)
 import Database.PropertyGraph.Neo4jBatch (runPropertyGraphT)
 
-import MasterPipe.Types (PackageTree(PackageTree),PackageName,Version,ModuleName,Fragment(FunctionFragment))
+import MasterPipe.Types (PackageTree(PackageTree),PackageName,Version,ModuleName,Fragment)
 import MasterPipe.EnumPackages (enumpackagesS)
 import MasterPipe.EnumVersions (enumVersionsD)
 import MasterPipe.Configure (configureD)
