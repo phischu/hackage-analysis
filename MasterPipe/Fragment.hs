@@ -20,7 +20,8 @@ import Data.Aeson.Generic (toJSON)
 import qualified Language.Haskell.Exts as AST (
     Module(Module),ModuleName(ModuleName),Decl(FunBind),
     ExportSpec,
-    Match(Match),Name(Ident,Symbol))
+    Match(Match),Name(Ident,Symbol),
+    prettyPrint)
 
 fragmentD :: (Proxy p) => () -> Pipe
     (ExceptionP (StateP VertexId p))
@@ -63,5 +64,5 @@ insertExportList modulevertex (Just exports) = do
     exportlistvertex <- newVertex empty
     newEdge empty "EXPORTLIST" modulevertex exportlistvertex
     forM_ exports (\export -> do
-        exportvertex <- newVertex (singleton "exportname" (toJSON export))
+        exportvertex <- newVertex (singleton "exportname" (toJSON (AST.prettyPrint export)))
         newEdge empty "EXPORT" exportlistvertex exportvertex)
