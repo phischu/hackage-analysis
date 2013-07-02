@@ -9,7 +9,7 @@ import Database.PropertyGraph (PropertyGraphT,VertexId,newVertex,newEdge)
 import Control.Proxy (Proxy,Pipe,request,respond,liftP,lift)
 import Control.Proxy.Safe (ExceptionP,SafeIO,tryIO)
 import Control.Proxy.Trans.State (StateP,get,put)
-import Control.Monad (forever,forM_,when)
+import Control.Monad (forever,forM_,when,(>=>))
 import Control.Monad.Morph (hoist)
 
 import Data.Text (Text,pack)
@@ -17,12 +17,17 @@ import Data.Map (empty,singleton,fromList)
 import Data.Maybe (mapMaybe)
 
 import Data.Aeson.Generic (toJSON)
+import Data.Generics.Uniplate.Data (universe,transform)
 
 import qualified Language.Haskell.Exts as AST (
     Module(Module),ModuleName(ModuleName),
     ExportSpec,
     Match(Match),Name(Ident,Symbol),
-    Decl(TypeDecl,TypeFamDecl,DataDecl,GDataDecl,ClassDecl,FunBind,PatBind,ForImp),
+    Decl(TypeDecl,TypeFamDecl,DataDecl,GDataDecl,ClassDecl,FunBind,PatBind,ForImp,TypeSig),
+    QualConDecl(QualConDecl),ConDecl(ConDecl,InfixConDecl,RecDecl),
+    GadtDecl(GadtDecl),
+    ClassDecl(ClsDecl),
+    Pat(PVar,PAsPat,PViewPat),
     prettyPrint)
 
 fragmentD :: (Proxy p) => () -> Pipe
@@ -52,20 +57,74 @@ fragmentD () = forever (do
         respond (package,configuration,modul,fragment))))
 
 extractFragment :: AST.Decl -> Maybe Fragment
-extractFragment (AST.TypeDecl _ name _ _) = Just (TypeFragment (AST.prettyPrint name))
-extractFragment (AST.TypeFamDecl _ name _ _) = Just (TypeFragment (AST.prettyPrint name))
-extractFragment (AST.DataDecl _ _ _ name _ _ _) = Just (TypeFragment (AST.prettyPrint name))
-extractFragment (AST.GDataDecl _ _ _ name _ _ _ _) = Just (TypeFragment (AST.prettyPrint name))
-extractFragment (AST.ClassDecl _ _ name _ _ _) = Just (ClassFragment (AST.prettyPrint name))
+extractFragment (AST.TypeDecl _ name _ _) = Just (TypeFragment (AST.prettyPrint name) [])
+extractFragment (AST.TypeFamDecl _ name _ _) = Just (TypeFragment (AST.prettyPrint name) [])
+extractFragment (AST.DataDecl _ _ _ name _ constructors _) =
+    Just (TypeFragment
+        (AST.prettyPrint name)
+        (concatMap extractDataDefinitions constructors))
+extractFragment (AST.GDataDecl _ _ _ name _ _ gadtdecls _) =
+    Just (TypeFragment
+        (AST.prettyPrint name)
+        (concatMap extractGDataDefinitions gadtdecls))
+extractFragment (AST.ClassDecl _ _ name _ _ classdecls) =
+    Just (ClassFragment
+        (AST.prettyPrint name)
+        (concatMap extractClassDefinitions classdecls))
 extractFragment (AST.FunBind ((AST.Match _ name _ _ _ _):_)) = Just (ValueFragment (AST.prettyPrint name))
-extractFragment (AST.PatBind _ _ _ _ _) = Nothing -- TODO: find all names bound by a pattern
+extractFragment (AST.PatBind _ pattern _ _ _) = Just (PatternFragment (extractPatternDefinitions pattern))
 extractFragment (AST.ForImp _ _ _ _ name _) = Just (ValueFragment (AST.prettyPrint name))
 extractFragment _ = Nothing
 
+extractDataDefinitions :: AST.QualConDecl -> [DefinitionName]
+extractDataDefinitions (AST.QualConDecl _ _ _ (AST.ConDecl name _)) = [AST.prettyPrint name]
+extractDataDefinitions (AST.QualConDecl _ _ _ (AST.InfixConDecl _ name _)) = [AST.prettyPrint name]
+extractDataDefinitions (AST.QualConDecl _ _ _ (AST.RecDecl name fields)) = AST.prettyPrint name : do
+    (fieldnames,_) <- fields
+    map AST.prettyPrint fieldnames
+
+extractGDataDefinitions :: AST.GadtDecl -> [DefinitionName]
+extractGDataDefinitions (AST.GadtDecl _ name _) = [AST.prettyPrint name]
+
+extractClassDefinitions :: AST.ClassDecl -> [DefinitionName]
+extractClassDefinitions (AST.ClsDecl (AST.TypeSig _ names _)) = map AST.prettyPrint names
+extractClassDefinitions _ = []
+
+extractPatternDefinitions :: AST.Pat -> [DefinitionName]
+extractPatternDefinitions pattern = do
+    let removeViewPattern pattern = case pattern of
+            (AST.PViewPat _ childpattern) -> childpattern
+            actualpattern -> actualpattern
+    singlepattern <- universe (transform removeViewPattern pattern)
+    case singlepattern of
+        AST.PVar name -> [AST.prettyPrint name]
+        AST.PAsPat name _ -> [AST.prettyPrint name]
+        _ -> []
+
 insertFragment :: (Monad m) => Fragment -> VertexId -> PropertyGraphT m VertexId
-insertFragment (ValueFragment fragmentname) = insertFragmentWithGenreAndName "Value" (pack fragmentname)
-insertFragment (TypeFragment fragmentname)  = insertFragmentWithGenreAndName "Type" (pack fragmentname)
-insertFragment (ClassFragment fragmentname) = insertFragmentWithGenreAndName "Class" (pack fragmentname)
+insertFragment (ValueFragment fragmentname) =
+    insertFragmentWithGenreAndName "Value" (pack fragmentname)
+insertFragment (TypeFragment fragmentname definitions)  =
+    insertFragmentWithGenreAndName "Type" (pack fragmentname) >=>
+    insertDefinitions definitions
+insertFragment (ClassFragment fragmentname definitions) =
+    insertFragmentWithGenreAndName "Class" (pack fragmentname) >=>
+    insertDefinitions definitions
+insertFragment (PatternFragment []) =
+    insertVertex "FRAGMENTEXCEPTION" "exception" "empty pattern" ["Fragmentexception"]
+insertFragment (PatternFragment (definition:definitions)) =
+    insertVertex "FRAGMENT" "fragmentname" (pack definition) ["Fragment","PatternFragment"] >=>
+    insertDefinitions (definition:definitions)
+
+insertDefinitions :: (Monad m) => [DefinitionName] -> VertexId -> PropertyGraphT m VertexId
+insertDefinitions definitions fragmentvertex = do
+    forM_ definitions (\definition -> insertVertex
+        "DEFINES"
+        "definitionname"
+        (pack definition)
+        ["Definition"]
+        fragmentvertex)
+    return fragmentvertex
 
 insertFragmentWithGenreAndName :: (Monad m) => Text -> Text -> VertexId -> PropertyGraphT m VertexId
 insertFragmentWithGenreAndName genre fragmentname modulevertex = do

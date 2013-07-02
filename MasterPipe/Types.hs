@@ -24,8 +24,11 @@ type AST = AST.Module
 
 type FragmentName = String
 data Fragment = ValueFragment FragmentName
-              | TypeFragment FragmentName
-              | ClassFragment FragmentName deriving (Eq,Show,Read)
+              | TypeFragment FragmentName [DefinitionName]
+              | ClassFragment FragmentName [DefinitionName]
+              | PatternFragment [DefinitionName] deriving (Eq,Show,Read)
+
+type DefinitionName = String
 
 newtype PackageTree = PackageTree (Map PackageName (Map Version (Map String (Map ModuleName [Fragment])))) deriving (Eq,Show,Read)
 

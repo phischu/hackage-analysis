@@ -40,7 +40,8 @@ executable Master
                        neo4j-haskell,
                        text,
                        mmorph,
-                       free
+                       free,
+                       uniplate
   default-language:    Haskell2010
   ghc-options:         -rtsopts -threaded -auto-all -caf-all -O2
 
