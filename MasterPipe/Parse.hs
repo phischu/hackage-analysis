@@ -48,7 +48,12 @@ parseD () = forever ((do
 
     (\e -> do
         modulevertex <- liftP get
-        void (lift (insertVertex "PARSEREXCEPTION" "exception" (pack (show (e :: SomeException))) modulevertex))))
+        void (lift (insertVertex
+            "PARSEREXCEPTION"
+            "exception"
+            (pack (show (e :: SomeException)))
+            ["Parserexception"]
+            modulevertex))))
 
 data ParserException = ParserException SrcLoc String deriving (Show,Typeable)
 

@@ -76,7 +76,7 @@ enummodulesD () = forever ((do
 
     (\NoLibrary -> do
         variantvertex <- liftP get
-        void (lift (insertVertex "VARIANTEXCEPTION" "exception" "no library" variantvertex)))
+        void (lift (insertVertex "VARIANTEXCEPTION" "exception" "no library" ["Variantexception"] variantvertex)))
 
         `catch`
 
@@ -87,8 +87,8 @@ data EnumModulesException = NoLibrary deriving (Show,Typeable)
 instance Exception EnumModulesException
 
 insertModule :: (Monad m) => Text -> VertexId -> PropertyGraphT m VertexId
-insertModule = insertVertex "MODULE" "modulename"
+insertModule modulename = insertVertex "MODULE" "modulename" modulename ["Module"]
 
 insertException :: (Monad m) => Text -> VertexId -> PropertyGraphT m VertexId
-insertException = insertVertex "MODULEEXCEPTION" "exception"
+insertException exception = insertVertex "MODULEEXCEPTION" "exception" exception ["Moduleexception"]
 

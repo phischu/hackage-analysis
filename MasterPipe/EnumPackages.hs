@@ -22,14 +22,14 @@ import Data.List (nub)
 enumpackagesS :: (Proxy p) => () -> Producer (ExceptionP (StateP VertexId p)) PackageName (PropertyGraphT SafeIO) ()
 enumpackagesS () = (do
 
-	rootvertex <- lift (newVertex empty)
+	rootvertex <- lift (newVertex empty [])
 
 	packagelist <- hoist lift (tryIO (readFile "packages.list" >>= return . map read . lines))
 
 	let packagenames = nub (map (\(PackageVersion packagename _ _) -> packagename) packagelist)
 
 	forM_ (every 100 packagenames) (\packagename -> do
-	    packagevertex <- lift (insertVertex "PACKAGE" "packagename" (pack packagename) rootvertex)
+	    packagevertex <- lift (insertVertex "PACKAGE" "packagename" (pack packagename) ["Package"] rootvertex)
 	    liftP (put packagevertex)
 	    respond packagename)
 

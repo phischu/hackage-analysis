@@ -72,7 +72,7 @@ data ConfigureException = CouldNotSatisfyDependencies PackageVersion [Dependency
 instance Exception ConfigureException
 
 insertVariant :: (Monad m) => Text -> VertexId -> PropertyGraphT m VertexId
-insertVariant = insertVertex "VARIANT" "configuration"
+insertVariant configuration = insertVertex "VARIANT" "configuration" configuration ["Variant"]
 
 
 {-

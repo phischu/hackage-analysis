@@ -69,17 +69,19 @@ insertFragment (ClassFragment fragmentname) = insertFragmentWithGenreAndName "Cl
 
 insertFragmentWithGenreAndName :: (Monad m) => Text -> Text -> VertexId -> PropertyGraphT m VertexId
 insertFragmentWithGenreAndName genre fragmentname modulevertex = do
-    fragmentvertex <- newVertex (fromList [
-        ("genre",toJSON genre),
-        ("fragmentname",toJSON fragmentname)])
+    fragmentvertex <- newVertex
+        (fromList [
+            ("genre",toJSON genre),
+            ("fragmentname",toJSON fragmentname)])
+        ["Fragment"]
     newEdge empty "FRAGMENT" modulevertex fragmentvertex
     return fragmentvertex
 
 insertExportList :: (Monad m) => VertexId -> Maybe [AST.ExportSpec] -> PropertyGraphT m ()
 insertExportList _            Nothing = return ()
 insertExportList modulevertex (Just exports) = do
-    exportlistvertex <- newVertex empty
+    exportlistvertex <- newVertex empty ["Exportlist"]
     newEdge empty "EXPORTLIST" modulevertex exportlistvertex
     forM_ exports (\export -> do
-        exportvertex <- newVertex (singleton "exportname" (toJSON (AST.prettyPrint export)))
+        exportvertex <- newVertex (singleton "exportname" (toJSON (AST.prettyPrint export))) ["Export"]
         newEdge empty "EXPORT" exportlistvertex exportvertex)

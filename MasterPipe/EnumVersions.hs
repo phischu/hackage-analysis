@@ -67,7 +67,7 @@ insertVersion versionname majorversion minorversion packagevertex = do
     versionvertex <- newVertex (fromList [
         ("versionname" ,JSON.String versionname),
         ("majorversion",JSON.String majorversion),
-        ("minorversion",JSON.String minorversion)])
+        ("minorversion",JSON.String minorversion)]) ["Version"]
     newEdge empty "VERSION" packagevertex versionvertex
     return versionvertex
 
