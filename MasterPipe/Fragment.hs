@@ -113,7 +113,7 @@ insertFragment (ClassFragment fragmentname definitions) =
 insertFragment (PatternFragment []) =
     insertVertex "FRAGMENTEXCEPTION" "exception" "empty pattern" ["Fragmentexception"]
 insertFragment (PatternFragment (definition:definitions)) =
-    insertVertex "FRAGMENT" "fragmentname" (pack definition) ["Fragment","PatternFragment"] >=>
+    insertVertex "FRAGMENT" "fragmentname" (pack definition) ["Fragment","Patternfragment"] >=>
     insertDefinitions (definition:definitions)
 
 insertDefinitions :: (Monad m) => [DefinitionName] -> VertexId -> PropertyGraphT m VertexId
