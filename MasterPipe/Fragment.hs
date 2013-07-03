@@ -162,7 +162,7 @@ insertExportList modulevertex (Just exports) = do
             AST.EModuleContents (AST.ModuleName reexportname) -> do
                 exportspecvertex <- newVertex
                     (singleton "reexportname" (toJSON reexportname))
-                    ["Exportpart"]
+                    ["Exportspec","Reexport"]
                 newEdge empty "EXPORTSPEC" exportlistvertex exportspecvertex
                 return exportspecvertex)
 
