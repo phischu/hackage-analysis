@@ -28,6 +28,8 @@ import qualified Language.Haskell.Exts as AST (
     GadtDecl(GadtDecl),
     ClassDecl(ClsDecl),
     Pat(PVar,PAsPat,PViewPat),
+    ExportSpec(EVar,EAbs,EThingAll,EThingWith,EModuleContents),
+    QName(Qual,UnQual,Special),CName,
     prettyPrint)
 
 fragmentD :: (Proxy p) => () -> Pipe
@@ -142,5 +144,56 @@ insertExportList modulevertex (Just exports) = do
     exportlistvertex <- newVertex empty ["Exportlist"]
     newEdge empty "EXPORTLIST" modulevertex exportlistvertex
     forM_ exports (\export -> do
-        exportvertex <- newVertex (singleton "exportname" (toJSON (AST.prettyPrint export))) ["Export"]
-        newEdge empty "EXPORT" exportlistvertex exportvertex)
+        case export of
+            AST.EVar qname ->
+                insertExportSpec "Valueexport" (getQualification qname) (getName qname) exportlistvertex
+            AST.EAbs qname -> 
+                insertExportSpec "Abstractexport" (getQualification qname) (getName qname) exportlistvertex
+            AST.EThingAll qname ->
+                insertExportSpec "Thingallexport" (getQualification qname) (getName qname) exportlistvertex
+            AST.EThingWith qname exportparts -> do
+                exportspecvertex <- insertExportSpec
+                    "Partialexport"
+                    (getQualification qname)
+                    (getName qname)
+                    exportlistvertex
+                insertExportParts exportparts exportspecvertex
+                return exportspecvertex
+            AST.EModuleContents (AST.ModuleName reexportname) -> do
+                exportspecvertex <- newVertex
+                    (singleton "reexportname" (toJSON reexportname))
+                    ["Exportpart"]
+                newEdge empty "EXPORTSPEC" exportlistvertex exportspecvertex
+                return exportspecvertex)
+
+getQualification :: AST.QName -> Maybe String
+getQualification (AST.Qual qualificaton _) = Just (AST.prettyPrint qualificaton)
+getQualification _                     = Nothing
+
+getName :: AST.QName -> String
+getName (AST.Qual _ name)     = AST.prettyPrint name
+getName (AST.UnQual name)     = AST.prettyPrint name
+getName (AST.Special special) = AST.prettyPrint special
+
+insertExportSpec :: (Monad m) => Text -> Maybe String -> String -> VertexId -> PropertyGraphT m VertexId
+insertExportSpec label maybeexportqualification exportname exportlistvertex = do
+    exportspecvertex <- newVertex
+        (singleton "exportname" (toJSON exportname))
+        ["Exportspec","Directexport",label]
+    newEdge empty "EXPORTSPEC" exportlistvertex exportspecvertex
+    case maybeexportqualification of
+        Nothing -> return ()
+        Just exportqualification -> do
+            exportqualificationvertex <- newVertex
+                (singleton "exportqualification" (toJSON exportqualification))
+                ["Exportqualification"]
+            newEdge empty "EXPORTQUALIFICATION" exportspecvertex exportqualificationvertex
+    return exportspecvertex
+
+insertExportParts :: (Monad m) => [AST.CName] -> VertexId -> PropertyGraphT m ()
+insertExportParts names exportspecvertex = do
+    forM_ names (\name -> do
+        exportpartvetex <- newVertex
+            (singleton "exportpartname" (toJSON (AST.prettyPrint name)))
+            ["Exportpart"]
+        newEdge empty "EXPORTPART" exportspecvertex exportpartvetex)
