@@ -1,5 +1,9 @@
 module Main where
 
+import Repository (loadRepository)
+
 
 main :: IO ()
-main = print "hallo"
+main = do
+    loadRepository
+    print "hallo"
