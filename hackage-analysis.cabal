@@ -24,6 +24,7 @@ executable hackage-analysis
                        transformers,
                        process,
                        directory,
+                       filepath,
                        hackage-db,
                        cpphs,
                        deepseq,
