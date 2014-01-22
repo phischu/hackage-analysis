@@ -18,7 +18,7 @@ executable hackage-analysis
   main-is:             Main.hs
   other-modules:       Repository,
                        Types,
-                       Instances
+                       ParsePackage
   build-depends:       base,
                        containers,
                        transformers,
@@ -28,6 +28,8 @@ executable hackage-analysis
                        cpphs,
                        deepseq,
                        haskell-src-exts,
+                       aeson,
+                       bytestring,
                        Cabal,
                        errors
   hs-source-dirs:      src
