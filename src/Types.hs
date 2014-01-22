@@ -8,9 +8,6 @@ type Repository = Map PackageName (Map VersionNumber FilePath)
 type PackageName   = String
 type VersionNumber = Version
 
-type ModuleName = String
 type ModuleAST = HSE.Module HSE.SrcSpanInfo
 
-data Instance = Instance [Module]
-data Module = Module ModuleName ModuleAST
 
