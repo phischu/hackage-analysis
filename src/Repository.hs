@@ -1,5 +1,7 @@
 module Repository where
 
+import Types (PackageName,VersionNumber,Repository)
+
 import Data.Version (showVersion,Version(Version))
 
 import Distribution.Hackage.DB (readHackage')
@@ -12,10 +14,6 @@ import Control.Monad (when,forM,void)
 import Data.Map (Map)
 import qualified Data.Map as Map (
     map,keys,filterWithKey,toList,fromList,union)
-
-type Repository = Map PackageName (Map VersionNumber FilePath)
-type PackageName   = String
-type VersionNumber = Version
 
 packagesDigest :: [PackageName]
 packagesDigest = smallPackageSelection

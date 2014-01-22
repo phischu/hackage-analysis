@@ -1,9 +1,10 @@
 module Main where
 
 import Repository (loadRepository)
-
+import Instances (parseAllPackages)
 
 main :: IO ()
 main = do
-    loadRepository
+    repository <- loadRepository
+    parseAllPackages repository
     print "hallo"
