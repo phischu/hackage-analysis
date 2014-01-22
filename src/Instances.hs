@@ -5,7 +5,7 @@ import Types (
 
 import Distribution.PackageDescription (
     GenericPackageDescription,PackageDescription,FlagAssignment,
-    library,libModules)
+    library,libModules,libBuildInfo,hsSourceDirs)
 import Distribution.PackageDescription.Parse (readPackageDescription)
 import Distribution.PackageDescription.Configuration (finalizePackageDescription)
 import Distribution.Verbosity (silent)
@@ -13,12 +13,27 @@ import Distribution.System (Platform(Platform),Arch(I386),OS(Linux))
 import Distribution.Compiler (CompilerId(CompilerId),CompilerFlavor(GHC))
 import Data.Version (Version(Version))
 import Distribution.Package (Dependency)
-import Distribution.ModuleName (ModuleName)
+import Distribution.ModuleName (ModuleName,toFilePath)
+
+import Language.Preprocessor.Cpphs (
+    runCpphs,
+    defaultCpphsOptions,CpphsOptions(boolopts),
+    defaultBoolOptions,BoolOptions(warnings))
+
+import Language.Haskell.Exts.Annotated (parseFileContentsWithMode)
+import Language.Haskell.Exts.Annotated.Fixity (baseFixities)
+import Language.Haskell.Exts.Parser (
+    ParseMode(..),defaultParseMode,ParseResult(ParseOk,ParseFailed))
+
+import Control.Exception (evaluate)
+import Control.DeepSeq (force)
 
 import Control.Error (
-    EitherT,runEitherT,hoistEither,fmapLT,scriptIO,note)
+    EitherT,runEitherT,hoistEither,fmapLT,scriptIO,note,left)
 
-import Control.Monad (forM)
+import System.Directory (doesFileExist)
+
+import Control.Monad (forM,filterM)
 
 import Data.Map (Map,traverseWithKey,fromList)
 
@@ -27,7 +42,12 @@ data PackageError =
     PackageFinalizationError [Dependency] |
     PackageNoLibrary
 
-data ModuleError = ModuleError
+data ModuleError =
+    ModuleFilteringError String |
+    ModuleFileNotFound |
+    MultipleModuleFilesFound |
+    PreprocessorError String |
+    ParserError String
 
 parseAllPackages ::
     Repository ->
@@ -59,7 +79,39 @@ parsePackage packagename packagepath = runEitherT (do
 
         eithermoduleast <- runEitherT (do
 
-            undefined)
+            let sourcedirs = hsSourceDirs (libBuildInfo librarysection)
+                potentialpaths = do
+                    directory <- sourcedirs
+                    extension <- [".hs",".lhs"]
+                    return (packagepath ++ directory ++ "/" ++ toFilePath modulename ++ extension)
+
+            existingpaths <- scriptIO (filterM doesFileExist potentialpaths)
+                `onFailure` ModuleFilteringError
+
+            modulepath <- case existingpaths of
+                [] -> left ModuleFileNotFound
+                [modulepath] -> return modulepath
+                _ -> left MultipleModuleFilesFound
+
+            let cpphsoptions = defaultCpphsOptions {boolopts = booloptions }
+                booloptions = defaultBoolOptions {warnings = False}
+
+            modulefile <- scriptIO (do
+                rawsource <- readFile modulepath
+                sourcecode <- runCpphs cpphsoptions modulepath rawsource
+                evaluate (force sourcecode))
+                    `onFailure` PreprocessorError
+
+            let mode = defaultParseMode {parseFilename = modulepath, fixities = Just baseFixities}
+
+            eitherast <- scriptIO (do
+                parseresult <- return (parseFileContentsWithMode mode modulefile)
+                case parseresult of
+                    ParseFailed _ message -> return (Left (ParserError message))
+                    ParseOk ast -> return (Right ast))
+                        `onFailure` ParserError
+
+            hoistEither eitherast)
 
         return (modulename,eithermoduleast))
     return (fromList modules))

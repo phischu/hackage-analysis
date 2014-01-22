@@ -25,6 +25,8 @@ executable hackage-analysis
                        process,
                        directory,
                        hackage-db,
+                       cpphs,
+                       deepseq,
                        haskell-src-exts,
                        Cabal,
                        errors
