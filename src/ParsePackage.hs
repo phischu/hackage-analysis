@@ -66,9 +66,12 @@ parseAllPackages = traverseWithKey (\packagename ->
     traverseWithKey (\_ -> parsePackage packagename))
 
 parseAndSaveAllPackages :: Repository -> IO ()
-parseAndSaveAllPackages = void . (traverseWithKey (\packagename ->
-    traverseWithKey (\versionnumber packagepath -> do
-        parsePackage packagename packagepath >>= savePackage packagename versionnumber)))
+parseAndSaveAllPackages repository = do
+    putStrLn "Parsing Packages..."
+    void (traverseWithKey (\packagename ->
+        traverseWithKey (\versionnumber packagepath -> do
+            parsePackage packagename packagepath >>= savePackage packagename versionnumber))
+                repository)
 
 parsePackage :: PackageName -> FilePath -> IO PackageResult
 parsePackage packagename packagepath = runEitherT (do
