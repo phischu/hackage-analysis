@@ -1,8 +1,9 @@
 {-# LANGUAGE OverloadedStrings #-}
 module ParsePackage where
 
-import Types (
-    Repository,SourceRepository,ParsedRepository,PackageName,VersionNumber,ModuleAST)
+import Common (
+    Repository,SourceRepository,ParsedRepository,PackageName,VersionNumber,ModuleAST,
+    traverseRepository)
 
 import Distribution.PackageDescription (
     GenericPackageDescription,PackageDescription,FlagAssignment,
@@ -65,17 +66,15 @@ data ModuleError =
     ParserError String deriving (Eq,Show,Read)
 
 parseAllPackages :: SourceRepository -> IO (Repository PackageResult)
-parseAllPackages = traverseWithKey (\packagename ->
-    traverseWithKey (\_ -> parsePackage packagename))
+parseAllPackages = traverseRepository (\packagename _ packagepath -> parsePackage packagename packagepath)
 
 parseAndSaveAllPackages :: SourceRepository -> IO ParsedRepository
 parseAndSaveAllPackages repository = do
     putStrLn "Parsing Packages ..."
-    flip traverseWithKey repository (\packagename ->
-        traverseWithKey (\versionnumber packagepath -> do
-            packageresult <- parsePackage packagename packagepath
-            savePackage packagename versionnumber packageresult
-            return (dropFileName (instanceFilePath packagename versionnumber))))
+    flip traverseRepository repository (\packagename versionnumber packagepath -> do
+        packageresult <- parsePackage packagename packagepath
+        savePackage packagename versionnumber packageresult
+        return (dropFileName (instanceFilePath packagename versionnumber)))
 
 parsePackage :: PackageName -> FilePath -> IO PackageResult
 parsePackage packagename packagepath = runEitherT (do
@@ -153,8 +152,8 @@ savePackage packagename versionnumber packageresult = do
 
     createDirectoryWriteFile (instanceFilePath packagename versionnumber) (encode packageinformation)
 
-    traverseWithKey (\modulename moduleinformation -> do
-        createDirectoryWriteFile (moduleFilePath packagename versionnumber modulename) (encode moduleinformation)) modulemap
+    flip traverseWithKey modulemap (\modulename moduleinformation -> do
+        createDirectoryWriteFile (moduleFilePath packagename versionnumber modulename) (encode moduleinformation))
     return ()
 
 createDirectoryWriteFile :: FilePath -> ByteString -> IO ()

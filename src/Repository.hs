@@ -1,6 +1,6 @@
 module Repository where
 
-import Types (PackageName,VersionNumber,SourceRepository)
+import Common (PackageName,VersionNumber,SourceRepository)
 
 import Data.Version (showVersion,Version(Version))
 
