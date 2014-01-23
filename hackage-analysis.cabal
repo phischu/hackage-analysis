@@ -30,6 +30,8 @@ executable hackage-analysis
                        cpphs,
                        deepseq,
                        haskell-src-exts,
+                       haskell-names,
+                       haskell-packages,
                        aeson,
                        bytestring,
                        Cabal,

@@ -9,7 +9,9 @@ import Distribution.Text (display)
 import qualified Language.Haskell.Exts.Annotated as HSE (Module,SrcSpanInfo)
 import Language.Haskell.Exts.Pretty (prettyPrint)
 
-import Data.Aeson (ToJSON(toJSON),object,(.=))
+import Data.Aeson (
+    ToJSON(toJSON),object,(.=),
+    FromJSON(parseJSON))
 
 import Data.Map (Map,traverseWithKey)
 
@@ -49,6 +51,9 @@ instance ToJSON PackageInformation where
         "modulenames" .= map display modulenames,
         "dependencies" .= map display dependencies]
 
+instance FromJSON PackageInformation where
+    parseJSON = undefined
+
 data ModuleInformation =
     ModuleError ModuleError |
     ModuleInformation ModuleAST deriving (Eq,Show)
@@ -56,3 +61,6 @@ data ModuleInformation =
 instance ToJSON ModuleInformation where
     toJSON (ModuleError moduleerror) = object ["moduleerror" .= show moduleerror]
     toJSON (ModuleInformation moduleast) = object ["moduleast" .= prettyPrint moduleast]
+
+instance FromJSON ModuleInformation where
+    parseJSON = undefined
