@@ -1,9 +1,9 @@
-{-# LANGUAGE OverloadedStrings #-}
 module ParsePackage where
 
 import Common (
     Repository,SourceRepository,ParsedRepository,PackageName,VersionNumber,ModuleAST,
-    traverseRepository)
+    traverseRepository,
+    PackageInformation(..),ModuleInformation(..),PackageError(..),ModuleError(..))
 
 import Distribution.PackageDescription (
     GenericPackageDescription,PackageDescription,FlagAssignment,
@@ -28,7 +28,6 @@ import Language.Haskell.Exts.Annotated (parseFileContentsWithMode)
 import Language.Haskell.Exts.Annotated.Fixity (baseFixities)
 import Language.Haskell.Exts.Parser (
     ParseMode(..),defaultParseMode,ParseResult(ParseOk,ParseFailed))
-import Language.Haskell.Exts.Pretty (prettyPrint)
 
 import Control.Exception (evaluate)
 import Control.DeepSeq (force)
@@ -36,7 +35,7 @@ import Control.DeepSeq (force)
 import Control.Error (
     EitherT,runEitherT,hoistEither,fmapLT,scriptIO,note,left)
 
-import Data.Aeson (ToJSON(toJSON),encode,object,(.=))
+import Data.Aeson (encode)
 
 import Data.ByteString.Lazy (ByteString)
 import qualified Data.ByteString.Lazy as ByteString (writeFile)
@@ -52,18 +51,6 @@ import Data.Map (Map,traverseWithKey,fromList,empty,keys)
 import qualified Data.Map as Map (map)
 
 type PackageResult = Either PackageError (Map ModuleName (Either ModuleError ModuleAST),[Dependency])
-
-data PackageError =
-    PackageReadingError String |
-    PackageFinalizationError [Dependency] |
-    PackageNoLibrary deriving (Eq,Show,Read)
-
-data ModuleError =
-    ModuleFilteringError String |
-    ModuleFileNotFound |
-    MultipleModuleFilesFound |
-    PreprocessorError String |
-    ParserError String deriving (Eq,Show,Read)
 
 parseAllPackages :: SourceRepository -> IO (Repository PackageResult)
 parseAllPackages = traverseRepository (\packagename _ packagepath -> parsePackage packagename packagepath)
@@ -191,20 +178,4 @@ packagePath packagename versionnumber = concat [
     display versionnumber,
     "/"]
 
-data PackageInformation =
-    PackageError PackageError |
-    PackageInformation [ModuleName] [Dependency] deriving (Eq,Show)
 
-instance ToJSON PackageInformation where
-    toJSON (PackageError packageerror) = object ["packageerror" .= show packageerror]
-    toJSON (PackageInformation modulenames dependencies) = object [
-        "modulenames" .= map display modulenames,
-        "dependencies" .= map display dependencies]
-
-data ModuleInformation =
-    ModuleError ModuleError |
-    ModuleInformation ModuleAST deriving (Eq,Show)
-
-instance ToJSON ModuleInformation where
-    toJSON (ModuleError moduleerror) = object ["moduleerror" .= show moduleerror]
-    toJSON (ModuleInformation moduleast) = object ["moduleast" .= prettyPrint moduleast]
