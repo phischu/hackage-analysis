@@ -6,7 +6,8 @@ import Types (
 
 import Distribution.PackageDescription (
     GenericPackageDescription,PackageDescription,FlagAssignment,
-    library,libModules,libBuildInfo,hsSourceDirs)
+    library,libModules,libBuildInfo,hsSourceDirs,
+    targetBuildDepends,buildDepends)
 import Distribution.PackageDescription.Parse (readPackageDescription)
 import Distribution.PackageDescription.Configuration (finalizePackageDescription)
 import Distribution.Verbosity (silent)
@@ -42,12 +43,14 @@ import qualified Data.ByteString.Lazy as ByteString (writeFile)
 import System.Directory (doesFileExist,createDirectoryIfMissing)
 import System.FilePath (dropFileName)
 
+import Data.List (nub)
+
 import Control.Monad (forM,filterM)
 
 import Data.Map (Map,traverseWithKey,fromList,empty,keys)
 import qualified Data.Map as Map (map)
 
-type PackageResult = Either PackageError (Map ModuleName (Either ModuleError ModuleAST))
+type PackageResult = Either PackageError (Map ModuleName (Either ModuleError ModuleAST),[Dependency])
 
 data PackageError =
     PackageReadingError String |
@@ -88,6 +91,8 @@ parsePackage packagename packagepath = runEitherT (do
     librarysection <- hoistEither (note () (library packagedescription))
         `onFailure` (const PackageNoLibrary)
 
+    let dependencies = nub (targetBuildDepends (libBuildInfo librarysection) ++ buildDepends packagedescription)
+
     modules <- forM (libModules librarysection) (\modulename -> do
 
         eithermoduleast <- runEitherT (do
@@ -127,7 +132,7 @@ parsePackage packagename packagepath = runEitherT (do
             hoistEither eitherast)
 
         return (modulename,eithermoduleast))
-    return (fromList modules))
+    return (fromList modules,dependencies))
 
 defaultPlatform :: Platform
 defaultPlatform = Platform I386 Linux
@@ -159,7 +164,8 @@ createDirectoryWriteFile filepath content = do
 
 interpretResult :: PackageResult -> (PackageInformation,Map ModuleName ModuleInformation)
 interpretResult (Left packageerror) = (PackageError packageerror,empty)
-interpretResult (Right modulemap) = (PackageInformation (keys modulemap),Map.map interpretModuleResult modulemap)
+interpretResult (Right (modulemap,dependencies)) =
+    (PackageInformation (keys modulemap) dependencies,Map.map interpretModuleResult modulemap)
 
 interpretModuleResult :: Either ModuleError ModuleAST -> ModuleInformation
 interpretModuleResult (Left moduleerror) = ModuleError moduleerror
@@ -188,11 +194,13 @@ packagePath packagename versionnumber = concat [
 
 data PackageInformation =
     PackageError PackageError |
-    PackageInformation [ModuleName] deriving (Eq,Show)
+    PackageInformation [ModuleName] [Dependency] deriving (Eq,Show)
 
 instance ToJSON PackageInformation where
     toJSON (PackageError packageerror) = object ["packageerror" .= show packageerror]
-    toJSON (PackageInformation modulenames) = object ["modulenames" .= map display modulenames]
+    toJSON (PackageInformation modulenames dependencies) = object [
+        "modulenames" .= map display modulenames,
+        "dependencies" .= map display dependencies]
 
 data ModuleInformation =
     ModuleError ModuleError |
