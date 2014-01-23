@@ -2,7 +2,7 @@
 module ParsePackage where
 
 import Types (
-    Repository,PackageName,VersionNumber,ModuleAST)
+    Repository,SourceRepository,ParsedRepository,PackageName,VersionNumber,ModuleAST)
 
 import Distribution.PackageDescription (
     GenericPackageDescription,PackageDescription,FlagAssignment,
@@ -42,7 +42,7 @@ import qualified Data.ByteString.Lazy as ByteString (writeFile)
 import System.Directory (doesFileExist,createDirectoryIfMissing)
 import System.FilePath (dropFileName)
 
-import Control.Monad (forM,filterM,void)
+import Control.Monad (forM,filterM)
 
 import Data.Map (Map,traverseWithKey,fromList,empty,keys)
 import qualified Data.Map as Map (map)
@@ -61,17 +61,18 @@ data ModuleError =
     PreprocessorError String |
     ParserError String deriving (Eq,Show,Read)
 
-parseAllPackages :: Repository -> IO (Map PackageName (Map VersionNumber PackageResult))
+parseAllPackages :: SourceRepository -> IO (Repository PackageResult)
 parseAllPackages = traverseWithKey (\packagename ->
     traverseWithKey (\_ -> parsePackage packagename))
 
-parseAndSaveAllPackages :: Repository -> IO ()
+parseAndSaveAllPackages :: SourceRepository -> IO ParsedRepository
 parseAndSaveAllPackages repository = do
     putStrLn "Parsing Packages..."
-    void (traverseWithKey (\packagename ->
+    flip traverseWithKey repository (\packagename ->
         traverseWithKey (\versionnumber packagepath -> do
-            parsePackage packagename packagepath >>= savePackage packagename versionnumber))
-                repository)
+            packageresult <- parsePackage packagename packagepath
+            savePackage packagename versionnumber packageresult
+            return (dropFileName (instanceFilePath packagename versionnumber))))
 
 parsePackage :: PackageName -> FilePath -> IO PackageResult
 parsePackage packagename packagepath = runEitherT (do

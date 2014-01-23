@@ -1,6 +1,6 @@
 module Repository where
 
-import Types (PackageName,VersionNumber,Repository)
+import Types (PackageName,VersionNumber,SourceRepository)
 
 import Data.Version (showVersion,Version(Version))
 
@@ -37,7 +37,7 @@ packagesThatMightBeInThePlatform = packagesThatMightComeWithGHC ++ [
 
 type Index = Map PackageName [VersionNumber]
 
-loadRepository :: IO Repository
+loadRepository :: IO SourceRepository
 loadRepository =
     availablePackagesOnHackage >>=
     return . pruneIndex packagesDigest >>=
@@ -67,7 +67,7 @@ packagesNotOnHackage = Map.fromList [
     ("integer-simple",[Version [0,1,0,1] []]),
     ("rts",[Version [0] []])]
 
-getPackages :: Index -> IO Repository
+getPackages :: Index -> IO SourceRepository
 getPackages index = downloadPackages index >> extractPackages index
 
 downloadPackages :: Index -> IO ()
@@ -112,7 +112,7 @@ packageDirectory packagename versionnumber = concat [
     packageIdentifier packagename versionnumber,
     "/"]
 
-extractPackages :: Index -> IO Repository
+extractPackages :: Index -> IO SourceRepository
 extractPackages index = do
     putStrLn "Extracting Packages ..."
     packageList <- forM (Map.toList index) (\(packagename,versionnumbers) -> do
