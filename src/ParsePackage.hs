@@ -70,7 +70,7 @@ parseAllPackages = traverseWithKey (\packagename ->
 
 parseAndSaveAllPackages :: SourceRepository -> IO ParsedRepository
 parseAndSaveAllPackages repository = do
-    putStrLn "Parsing Packages..."
+    putStrLn "Parsing Packages ..."
     flip traverseWithKey repository (\packagename ->
         traverseWithKey (\versionnumber packagepath -> do
             packageresult <- parsePackage packagename packagepath
@@ -173,13 +173,13 @@ interpretModuleResult (Right moduleast) = ModuleInformation moduleast
 
 instanceFilePath :: PackageName -> VersionNumber -> FilePath
 instanceFilePath packagename versionnumber = concat [
-    "data/instances/",
+    "data/info/",
     packagePath packagename versionnumber,
-    "instance.json"]
+    "info.json"]
 
 moduleFilePath :: PackageName -> VersionNumber -> ModuleName -> FilePath
 moduleFilePath packagename versionnumber modulename = concat [
-    "data/instances/",
+    "data/info/",
     packagePath packagename versionnumber,
     display modulename,
     "/",
