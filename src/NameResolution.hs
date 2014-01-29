@@ -26,9 +26,6 @@ import Data.Set (Set,empty)
 
 data NameErrors = NameErrors (Set (Error SrcSpanInfo))
 
-resolveAllPackageNames :: FilePath -> IO (Repository NameErrors)
-resolveAllPackageNames = undefined
-
 resolveAndSaveAllPackageNames :: ParsedRepository -> IO ()
 resolveAndSaveAllPackageNames parsedrepository = do
     putStrLn "Resolving Names ..."
@@ -56,7 +53,8 @@ resolveNames parsedrepository packagepath = do
             return (NameErrors nameerrors)
 
 recoverModules :: FilePath -> [ModuleName] -> IO [ModuleAST]
-recoverModules = undefined
+recoverModules packagepath modulenames = do
+    return undefined
 
 saveNameErrors :: FilePath -> NameErrors -> IO ()
 saveNameErrors = undefined

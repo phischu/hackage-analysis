@@ -4,16 +4,20 @@ module Common where
 import Data.Version (Version)
 import Distribution.Package (Dependency)
 import Distribution.ModuleName (ModuleName)
-import Distribution.Text (display)
+import Distribution.Text (display,simpleParse)
 
 import qualified Language.Haskell.Exts.Annotated as HSE (Module,SrcSpanInfo)
+import Language.Haskell.Exts.Annotated (parseModule,ParseResult(ParseOk,ParseFailed))
 import Language.Haskell.Exts.Pretty (prettyPrint)
 
 import Data.Aeson (
     ToJSON(toJSON),object,(.=),
-    FromJSON(parseJSON))
+    FromJSON(parseJSON),Value(Object),(.:))
+import Data.Aeson.Types (Parser)
 
 import Data.Map (Map,traverseWithKey)
+
+import Control.Monad (mzero,mplus)
 
 type Repository a = Map PackageName (Map VersionNumber a)
 type SourceRepository = Repository FilePath
@@ -52,7 +56,22 @@ instance ToJSON PackageInformation where
         "dependencies" .= map display dependencies]
 
 instance FromJSON PackageInformation where
-    parseJSON = undefined
+    parseJSON value = parsePackageError value `mplus` parsePackageInformation value
+
+parsePackageError :: Value -> Parser PackageInformation
+parsePackageError (Object o) = do
+    packageerrorvalue <- o .: "packageerror"
+    return (PackageError (read packageerrorvalue))
+parsePackageError _ = mzero
+
+parsePackageInformation :: Value -> Parser PackageInformation
+parsePackageInformation (Object o) = do
+    modulenamevalues <- o .: "modulenames"
+    dependencyvalues <- o .: "dependencies"
+    modulenames <- maybe mzero return (mapM simpleParse modulenamevalues)
+    dependencies <- maybe mzero return (mapM simpleParse dependencyvalues)
+    return (PackageInformation modulenames dependencies)
+parsePackageInformation _ = mzero
 
 data ModuleInformation =
     ModuleError ModuleError |
@@ -63,4 +82,18 @@ instance ToJSON ModuleInformation where
     toJSON (ModuleInformation moduleast) = object ["moduleast" .= prettyPrint moduleast]
 
 instance FromJSON ModuleInformation where
-    parseJSON = undefined
+    parseJSON value = parseModuleError value `mplus` parseModuleInformation value
+
+parseModuleError :: Value -> Parser ModuleInformation
+parseModuleError (Object o) = do
+    moduleerrorvalue <- o .: "moduleerror"
+    return (ModuleError (read moduleerrorvalue))
+parseModuleError _ = mzero
+
+parseModuleInformation :: Value -> Parser ModuleInformation
+parseModuleInformation (Object o) = do
+    moduleastvalue <- o .: "moduleast"
+    case parseModule moduleastvalue of
+        ParseOk moduleast -> return (ModuleInformation moduleast)
+        ParseFailed _ _ -> mzero
+parseModuleInformation _ = mzero
