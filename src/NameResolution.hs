@@ -1,4 +1,4 @@
-{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeFamilies, GeneralizedNewtypeDeriving #-}
 module NameResolution where
 
 import Common (
@@ -7,7 +7,8 @@ import Common (
     ModuleInformation(..),ModuleAST)
 
 import Language.Haskell.Names (computeInterfaces,Symbols,Error)
-import Distribution.HaskellSuite.Modules (MonadModule(..))
+import Language.Haskell.Names.Interfaces (writeInterface)
+import Distribution.HaskellSuite.Modules (MonadModule(..),modToString)
 import Language.Haskell.Exts.Extension (Language(Haskell2010))
 import Language.Haskell.Exts.Annotated (SrcSpanInfo)
 
@@ -22,6 +23,8 @@ import Data.Aeson (decode)
 import qualified Data.ByteString.Lazy as ByteString (readFile)
 
 import Control.Monad (when,forM)
+import Control.Monad.Trans.Class (lift)
+import Control.Monad.Trans.Reader (ReaderT,runReaderT,ask)
 
 import Data.Maybe (catMaybes)
 import Data.Set (Set,empty)
@@ -51,7 +54,7 @@ resolveNames parsedrepository packagepath = do
         Just (PackageInformation modulenames dependencies) -> do
             resolveDependencies parsedrepository dependencies
             modules <- recoverModules packagepath modulenames
-            nameerrors <- runNameResolution (computeInterfaces Haskell2010 [] modules) (parsedrepository,dependencies)
+            nameerrors <- runNameResolution (computeInterfaces Haskell2010 [] modules) (packagepath,parsedrepository,dependencies)
             return (NameErrors nameerrors)
 
 recoverModules :: FilePath -> [ModuleName] -> IO [ModuleAST]
@@ -76,12 +79,23 @@ saveNameErrors packagepath nameerrors = return ()
 resolveDependencies :: ParsedRepository -> [Dependency] -> IO ()
 resolveDependencies parsedrepository dependencies = return ()
 
-data NameResolutionMonad a = NameResolutionMonad
-
-instance Monad NameResolutionMonad where
+newtype NameResolutionMonad a = NameResolutionMonad {
+    unNameResolutionMonad :: ReaderT (FilePath,ParsedRepository,[Dependency]) IO a } deriving (Functor,Monad)
 
 instance MonadModule NameResolutionMonad where
     type ModuleInfo NameResolutionMonad = Symbols
+    lookupInCache modulename = undefined
+    insertInCache modulename symbols = NameResolutionMonad (do
+        (packagepath,_,_) <- ask
+        let modulenamespath = concat [
+                packagepath,
+                modToString modulename,
+                "/",
+                "names.json"]
+        lift (writeInterface modulenamespath symbols))
+    getPackages   = return []
+    readModuleInfo filepaths modulename = error
+        ("not implemented readModuleInfo: "++show filepaths++" "++modToString modulename)
 
-runNameResolution :: NameResolutionMonad a -> (ParsedRepository,[Dependency]) -> IO a
-runNameResolution = undefined
+runNameResolution :: NameResolutionMonad a -> (FilePath,ParsedRepository,[Dependency]) -> IO a
+runNameResolution = runReaderT . unNameResolutionMonad
