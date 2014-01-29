@@ -13,6 +13,7 @@ import Language.Haskell.Exts.Annotated (SrcSpanInfo)
 
 import Distribution.Package (Dependency)
 import Distribution.ModuleName (ModuleName)
+import Distribution.Text (display)
 
 import System.Directory (doesFileExist)
 
@@ -22,6 +23,7 @@ import qualified Data.ByteString.Lazy as ByteString (readFile)
 
 import Control.Monad (when,forM)
 
+import Data.Maybe (catMaybes)
 import Data.Set (Set,empty)
 
 data NameErrors = NameErrors (Set (Error SrcSpanInfo))
@@ -53,8 +55,20 @@ resolveNames parsedrepository packagepath = do
             return (NameErrors nameerrors)
 
 recoverModules :: FilePath -> [ModuleName] -> IO [ModuleAST]
-recoverModules packagepath modulenames = do
-    return undefined
+recoverModules packagepath modulenames = mapM (recoverModule packagepath) modulenames >>= return . catMaybes
+
+recoverModule :: FilePath -> ModuleName -> IO (Maybe ModuleAST)
+recoverModule packagepath modulename = do
+    let modulepath = concat [
+            packagepath,
+            display modulename,
+            "/",
+            "ast.json"]
+    maybemoduleinformation <- ByteString.readFile modulepath >>= return . decode
+    case maybemoduleinformation of
+        Nothing -> return Nothing
+        Just (ModuleError _) -> return Nothing
+        Just (ModuleInformation moduleast) -> return (Just moduleast)
 
 saveNameErrors :: FilePath -> NameErrors -> IO ()
 saveNameErrors = undefined
