@@ -7,7 +7,7 @@ import Common (
     ModuleInformation(..),ModuleAST)
 
 import Language.Haskell.Names (computeInterfaces,Symbols,Error)
-import Language.Haskell.Names.Interfaces (writeInterface)
+import Language.Haskell.Names.Interfaces (writeInterface,readInterface)
 import Distribution.HaskellSuite.Modules (MonadModule(..),modToString)
 import Language.Haskell.Exts.Extension (Language(Haskell2010))
 import Language.Haskell.Exts.Annotated (SrcSpanInfo)
@@ -28,6 +28,8 @@ import Control.Monad.Trans.Reader (ReaderT,runReaderT,ask)
 
 import Data.Maybe (catMaybes)
 import Data.Set (Set,empty)
+import Data.Map (Map)
+import qualified Data.Map as Map (lookup)
 
 data NameErrors = NameErrors (Set (Error SrcSpanInfo))
 
@@ -80,13 +82,17 @@ resolveDependencies :: ParsedRepository -> [Dependency] -> IO ()
 resolveDependencies parsedrepository dependencies = return ()
 
 newtype NameResolutionMonad a = NameResolutionMonad {
-    unNameResolutionMonad :: ReaderT (FilePath,ParsedRepository,[Dependency]) IO a } deriving (Functor,Monad)
+    unNameResolutionMonad :: ReaderT (FilePath,Map String FilePath) IO a } deriving (Functor,Monad)
 
 instance MonadModule NameResolutionMonad where
     type ModuleInfo NameResolutionMonad = Symbols
-    lookupInCache modulename = undefined
+    lookupInCache modulename = NameResolutionMonad (do
+        (_,modulemap) <- ask
+        case Map.lookup (modToString modulename) modulemap of
+            Nothing -> return Nothing
+            Just modulefilepath -> lift (readInterface modulefilepath >>= return . Just))
     insertInCache modulename symbols = NameResolutionMonad (do
-        (packagepath,_,_) <- ask
+        (packagepath,_) <- ask
         let modulenamespath = concat [
                 packagepath,
                 modToString modulename,
@@ -98,4 +104,4 @@ instance MonadModule NameResolutionMonad where
         ("not implemented readModuleInfo: "++show filepaths++" "++modToString modulename)
 
 runNameResolution :: NameResolutionMonad a -> (FilePath,ParsedRepository,[Dependency]) -> IO a
-runNameResolution = runReaderT . unNameResolutionMonad
+runNameResolution = undefined
