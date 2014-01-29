@@ -71,10 +71,10 @@ recoverModule packagepath modulename = do
         Just (ModuleInformation moduleast) -> return (Just moduleast)
 
 saveNameErrors :: FilePath -> NameErrors -> IO ()
-saveNameErrors = undefined
+saveNameErrors packagepath nameerrors = return ()
 
 resolveDependencies :: ParsedRepository -> [Dependency] -> IO ()
-resolveDependencies parsedrepository dependencies = undefined
+resolveDependencies parsedrepository dependencies = return ()
 
 data NameResolutionMonad a = NameResolutionMonad
 
