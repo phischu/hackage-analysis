@@ -24,7 +24,7 @@ import Data.Aeson (decode,encode,ToJSON(toJSON),object,(.=))
 
 import qualified Data.ByteString.Lazy as ByteString (readFile,writeFile)
 
-import Control.Monad (when,forM_)
+import Control.Monad (when,forM_,filterM)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Reader (ReaderT,runReaderT,ask)
 
@@ -141,8 +141,9 @@ findModules packagepath = do
     case maybepackageinformation of
         Nothing -> return []
         (Just (PackageError _)) -> return []
-        (Just (PackageInformation modulenames _)) ->
-            return (map (\modulename -> (modulename,modulenamespath packagepath modulename)) modulenames)
+        (Just (PackageInformation modulenames _)) -> do
+            let modulelist = map (\modulename -> (modulename,modulenamespath packagepath modulename)) modulenames
+            filterM (\(_,path) -> doesFileExist path) modulelist
 
 data NameErrors = NameErrors (Set (Error SrcSpanInfo))
 
