@@ -31,7 +31,7 @@ import Control.Monad.Trans.Reader (ReaderT,runReaderT,ask)
 import Data.Maybe (catMaybes,listToMaybe)
 import Data.Set (Set,empty)
 import qualified Data.Set as Set (map)
-import Data.Map (Map,(!),traverseWithKey)
+import Data.Map (Map,traverseWithKey)
 import qualified Data.Map as Map (lookup,fromList,toAscList)
 
 resolveAndSaveAllPackageNames :: ParsedRepository -> IO ()
@@ -93,8 +93,12 @@ nameerrorspath packagepath = packagepath ++ "nameerrors.json"
 resolveDependencies :: ParsedRepository -> [Dependency] -> IO ()
 resolveDependencies parsedrepository dependencies =
     forM_ dependencies (\(Dependency (PackageName packagename) versionrange) -> do
-        flip traverseWithKey (parsedrepository ! packagename) (\versionnumber packagepath -> do
-            when (withinRange versionnumber versionrange) (resolveNamesAndSaveNameErrors parsedrepository packagepath)))
+        case Map.lookup packagename parsedrepository of
+            Nothing -> return ()
+            Just versionmap -> do
+                flip traverseWithKey versionmap (\versionnumber packagepath -> do
+                    when (withinRange versionnumber versionrange) (resolveNamesAndSaveNameErrors parsedrepository packagepath))
+                return ())
 
 newtype NameResolutionMonad a = NameResolutionMonad {
     unNameResolutionMonad :: ReaderT (FilePath,Map ModuleName FilePath) IO a } deriving (Functor,Monad)
@@ -127,7 +131,7 @@ runNameResolution nameresolution (packagepath,parsedrepository,dependencies) = d
 
 findDependency :: ParsedRepository -> Dependency -> Maybe FilePath
 findDependency parsedrepository (Dependency (PackageName packagename) versionrange) =
-    listToMaybe (map snd (filter (\(version,_) -> withinRange version versionrange) (Map.toAscList (parsedrepository ! packagename))))
+    listToMaybe (map snd (filter (\(version,_) -> withinRange version versionrange) (maybe [] Map.toAscList (Map.lookup packagename parsedrepository))))
 
 findModules :: FilePath -> IO [(ModuleName,FilePath)]
 findModules packagepath = do
