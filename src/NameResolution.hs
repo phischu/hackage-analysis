@@ -1,4 +1,4 @@
-{-# LANGUAGE TypeFamilies, GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE TypeFamilies, GeneralizedNewtypeDeriving, OverloadedStrings #-}
 module NameResolution where
 
 import Common (
@@ -20,20 +20,19 @@ import Distribution.Version (withinRange)
 
 import System.Directory (doesFileExist)
 
-import Data.Aeson (decode)
+import Data.Aeson (decode,encode,ToJSON(toJSON),object,(.=))
 
-import qualified Data.ByteString.Lazy as ByteString (readFile)
+import qualified Data.ByteString.Lazy as ByteString (readFile,writeFile)
 
-import Control.Monad (when)
+import Control.Monad (when,forM_)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Reader (ReaderT,runReaderT,ask)
 
 import Data.Maybe (catMaybes,listToMaybe)
 import Data.Set (Set,empty)
-import Data.Map (Map,(!))
+import qualified Data.Set as Set (map)
+import Data.Map (Map,(!),traverseWithKey)
 import qualified Data.Map as Map (lookup,fromList,toAscList)
-
-data NameErrors = NameErrors (Set (Error SrcSpanInfo))
 
 resolveAndSaveAllPackageNames :: ParsedRepository -> IO ()
 resolveAndSaveAllPackageNames parsedrepository = do
@@ -44,7 +43,7 @@ resolveAndSaveAllPackageNames parsedrepository = do
 
 resolveNamesAndSaveNameErrors :: ParsedRepository ->  FilePath -> IO ()
 resolveNamesAndSaveNameErrors parsedrepository packagepath = do
-    nameerrorsexist <- doesFileExist (packagepath ++ "nameerrors.json") 
+    nameerrorsexist <- doesFileExist (nameerrorspath packagepath) 
     when (not nameerrorsexist) (do
         nameerrors <- resolveNames parsedrepository packagepath
         saveNameErrors packagepath nameerrors)
@@ -86,10 +85,16 @@ loadModuleInformation :: FilePath -> ModuleName -> IO (Maybe ModuleInformation)
 loadModuleInformation packagepath modulename = ByteString.readFile (modulepath packagepath modulename) >>= return . decode
 
 saveNameErrors :: FilePath -> NameErrors -> IO ()
-saveNameErrors packagepath nameerrors = return ()
+saveNameErrors packagepath nameerrors = ByteString.writeFile (nameerrorspath packagepath) (encode nameerrors)
+
+nameerrorspath :: FilePath -> FilePath
+nameerrorspath packagepath = packagepath ++ "nameerrors.json"
 
 resolveDependencies :: ParsedRepository -> [Dependency] -> IO ()
-resolveDependencies parsedrepository dependencies = return ()
+resolveDependencies parsedrepository dependencies =
+    forM_ dependencies (\(Dependency (PackageName packagename) versionrange) -> do
+        flip traverseWithKey (parsedrepository ! packagename) (\versionnumber packagepath -> do
+            when (withinRange versionnumber versionrange) (resolveNamesAndSaveNameErrors parsedrepository packagepath)))
 
 newtype NameResolutionMonad a = NameResolutionMonad {
     unNameResolutionMonad :: ReaderT (FilePath,Map ModuleName FilePath) IO a } deriving (Functor,Monad)
@@ -133,6 +138,9 @@ findModules packagepath = do
         (Just (PackageInformation modulenames _)) ->
             return (map (\modulename -> (modulename,modulepath packagepath modulename)) modulenames)
 
+data NameErrors = NameErrors (Set (Error SrcSpanInfo))
 
+instance ToJSON NameErrors where
+    toJSON (NameErrors nameerrors) = object ["nameerrors" .= toJSON (Set.map show nameerrors)]
 
 
