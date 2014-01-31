@@ -61,7 +61,7 @@ resolveNames parsedrepository packagepath = do
             nameerrors <- runNameResolution (computeInterfaces Haskell2010 [] modules) (packagepath,parsedrepository,dependencies)
             return (NameErrors nameerrors)
 
-loadPackage :: FilePath -> IO PackageInformation
+loadPackage :: FilePath -> IO (Maybe PackageInformation)
 loadPackage packagepath = ByteString.readFile (packagepath ++ "info.json") >>= return . decode
 
 recoverModules :: FilePath -> [ModuleName] -> IO [ModuleAST]
@@ -69,16 +69,21 @@ recoverModules packagepath modulenames = mapM (recoverModule packagepath) module
 
 recoverModule :: FilePath -> ModuleName -> IO (Maybe ModuleAST)
 recoverModule packagepath modulename = do
-    let modulepath = concat [
-            packagepath,
-            display modulename,
-            "/",
-            "ast.json"]
-    maybemoduleinformation <- ByteString.readFile modulepath >>= return . decode
+    maybemoduleinformation <- loadModuleInformation packagepath modulename
     case maybemoduleinformation of
         Nothing -> return Nothing
         Just (ModuleError _) -> return Nothing
         Just (ModuleInformation moduleast) -> return (Just moduleast)
+
+modulepath :: FilePath -> ModuleName -> FilePath
+modulepath packagepath modulename = concat [
+    packagepath,
+    display modulename,
+    "/",
+    "ast.json"]
+
+loadModuleInformation :: FilePath -> ModuleName -> IO (Maybe ModuleInformation)
+loadModuleInformation packagepath modulename = ByteString.readFile (modulepath packagepath modulename) >>= return . decode
 
 saveNameErrors :: FilePath -> NameErrors -> IO ()
 saveNameErrors packagepath nameerrors = return ()
@@ -124,7 +129,10 @@ findModules packagepath = do
     maybepackageinformation <- loadPackage packagepath
     case maybepackageinformation of
         Nothing -> return []
-        (Just _) -> undefined
+        (Just (PackageError _)) -> return []
+        (Just (PackageInformation modulenames _)) ->
+            return (map (\modulename -> (modulename,modulepath packagepath modulename)) modulenames)
+
 
 
 
