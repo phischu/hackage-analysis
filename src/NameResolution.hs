@@ -8,13 +8,15 @@ import Common (
 
 import Language.Haskell.Names (computeInterfaces,Symbols,Error)
 import Language.Haskell.Names.Interfaces (writeInterface,readInterface)
-import Distribution.HaskellSuite.Modules (MonadModule(..),modToString)
+import Distribution.HaskellSuite.Modules (
+    MonadModule(..),convertModuleName,modToString)
 import Language.Haskell.Exts.Extension (Language(Haskell2010))
 import Language.Haskell.Exts.Annotated (SrcSpanInfo)
 
-import Distribution.Package (Dependency)
+import Distribution.Package (Dependency(Dependency),PackageName(PackageName))
 import Distribution.ModuleName (ModuleName)
 import Distribution.Text (display)
+import Distribution.Version (withinRange)
 
 import System.Directory (doesFileExist)
 
@@ -26,10 +28,10 @@ import Control.Monad (when,forM)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Reader (ReaderT,runReaderT,ask)
 
-import Data.Maybe (catMaybes)
+import Data.Maybe (catMaybes,listToMaybe)
 import Data.Set (Set,empty)
-import Data.Map (Map)
-import qualified Data.Map as Map (lookup)
+import Data.Map (Map,(!))
+import qualified Data.Map as Map (lookup,fromList,toAscList)
 
 data NameErrors = NameErrors (Set (Error SrcSpanInfo))
 
@@ -49,7 +51,7 @@ resolveNamesAndSaveNameErrors parsedrepository packagepath = do
 
 resolveNames :: ParsedRepository -> FilePath -> IO NameErrors
 resolveNames parsedrepository packagepath = do
-    maybepackageinformation <- ByteString.readFile (packagepath ++ "info.json") >>= return . decode
+    maybepackageinformation <- loadPackage packagepath
     case maybepackageinformation of
         Nothing -> return (NameErrors empty)
         Just (PackageError _) -> return (NameErrors empty)
@@ -58,6 +60,9 @@ resolveNames parsedrepository packagepath = do
             modules <- recoverModules packagepath modulenames
             nameerrors <- runNameResolution (computeInterfaces Haskell2010 [] modules) (packagepath,parsedrepository,dependencies)
             return (NameErrors nameerrors)
+
+loadPackage :: FilePath -> IO PackageInformation
+loadPackage packagepath = ByteString.readFile (packagepath ++ "info.json") >>= return . decode
 
 recoverModules :: FilePath -> [ModuleName] -> IO [ModuleAST]
 recoverModules packagepath modulenames = mapM (recoverModule packagepath) modulenames >>= return . catMaybes
@@ -82,13 +87,13 @@ resolveDependencies :: ParsedRepository -> [Dependency] -> IO ()
 resolveDependencies parsedrepository dependencies = return ()
 
 newtype NameResolutionMonad a = NameResolutionMonad {
-    unNameResolutionMonad :: ReaderT (FilePath,Map String FilePath) IO a } deriving (Functor,Monad)
+    unNameResolutionMonad :: ReaderT (FilePath,Map ModuleName FilePath) IO a } deriving (Functor,Monad)
 
 instance MonadModule NameResolutionMonad where
     type ModuleInfo NameResolutionMonad = Symbols
     lookupInCache modulename = NameResolutionMonad (do
         (_,modulemap) <- ask
-        case Map.lookup (modToString modulename) modulemap of
+        case Map.lookup (convertModuleName modulename) modulemap of
             Nothing -> return Nothing
             Just modulefilepath -> lift (readInterface modulefilepath >>= return . Just))
     insertInCache modulename symbols = NameResolutionMonad (do
@@ -104,4 +109,22 @@ instance MonadModule NameResolutionMonad where
         ("not implemented readModuleInfo: "++show filepaths++" "++modToString modulename)
 
 runNameResolution :: NameResolutionMonad a -> (FilePath,ParsedRepository,[Dependency]) -> IO a
-runNameResolution = undefined
+runNameResolution nameresolution (packagepath,parsedrepository,dependencies) = do
+    let dependencypaths = map (findDependency parsedrepository) dependencies
+    modules <- mapM findModules (catMaybes dependencypaths)
+    let modulemap = Map.fromList (concat modules)
+    runReaderT (unNameResolutionMonad nameresolution) (packagepath,modulemap)
+
+findDependency :: ParsedRepository -> Dependency -> Maybe FilePath
+findDependency parsedrepository (Dependency (PackageName packagename) versionrange) =
+    listToMaybe (map snd (filter (\(version,_) -> withinRange version versionrange) (Map.toAscList (parsedrepository ! packagename))))
+
+findModules :: FilePath -> IO [(ModuleName,FilePath)]
+findModules packagepath = do
+    maybepackageinformation <- loadPackage packagepath
+    case maybepackageinformation of
+        Nothing -> return []
+        (Just _) -> undefined
+
+
+
