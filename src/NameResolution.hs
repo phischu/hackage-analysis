@@ -2,7 +2,7 @@
 module NameResolution where
 
 import Common (
-    Repository,ParsedRepository,traverseRepository,
+    ParsedRepository,traverseRepository,
     PackageInformation(..),
     ModuleInformation(..),ModuleAST)
 
@@ -24,7 +24,7 @@ import Data.Aeson (decode)
 
 import qualified Data.ByteString.Lazy as ByteString (readFile)
 
-import Control.Monad (when,forM)
+import Control.Monad (when)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Reader (ReaderT,runReaderT,ask)
 
