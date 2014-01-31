@@ -74,15 +74,22 @@ recoverModule packagepath modulename = do
         Just (ModuleError _) -> return Nothing
         Just (ModuleInformation moduleast) -> return (Just moduleast)
 
-modulepath :: FilePath -> ModuleName -> FilePath
-modulepath packagepath modulename = concat [
+moduleastpath :: FilePath -> ModuleName -> FilePath
+moduleastpath packagepath modulename = concat [
     packagepath,
     display modulename,
     "/",
     "ast.json"]
 
+modulenamespath :: FilePath -> ModuleName -> FilePath
+modulenamespath packagepath modulename = concat [
+    packagepath,
+    display modulename,
+    "/",
+    "names.json"]   
+
 loadModuleInformation :: FilePath -> ModuleName -> IO (Maybe ModuleInformation)
-loadModuleInformation packagepath modulename = ByteString.readFile (modulepath packagepath modulename) >>= return . decode
+loadModuleInformation packagepath modulename = ByteString.readFile (moduleastpath packagepath modulename) >>= return . decode
 
 saveNameErrors :: FilePath -> NameErrors -> IO ()
 saveNameErrors packagepath nameerrors = ByteString.writeFile (nameerrorspath packagepath) (encode nameerrors)
@@ -112,12 +119,7 @@ instance MonadModule NameResolutionMonad where
             Just modulefilepath -> lift (readInterface modulefilepath >>= return . Just))
     insertInCache modulename symbols = NameResolutionMonad (do
         (packagepath,_) <- ask
-        let modulenamespath = concat [
-                packagepath,
-                modToString modulename,
-                "/",
-                "names.json"]
-        lift (writeInterface modulenamespath symbols))
+        lift (writeInterface (modulenamespath packagepath (convertModuleName modulename)) symbols))
     getPackages   = return []
     readModuleInfo filepaths modulename = error
         ("not implemented readModuleInfo: "++show filepaths++" "++modToString modulename)
@@ -140,7 +142,7 @@ findModules packagepath = do
         Nothing -> return []
         (Just (PackageError _)) -> return []
         (Just (PackageInformation modulenames _)) ->
-            return (map (\modulename -> (modulename,modulepath packagepath modulename)) modulenames)
+            return (map (\modulename -> (modulename,modulenamespath packagepath modulename)) modulenames)
 
 data NameErrors = NameErrors (Set (Error SrcSpanInfo))
 
