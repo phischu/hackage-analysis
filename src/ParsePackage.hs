@@ -45,7 +45,7 @@ import System.FilePath (dropFileName)
 
 import Data.List (nub)
 
-import Control.Monad (forM,filterM)
+import Control.Monad (forM,filterM,when)
 
 import Data.Map (Map,traverseWithKey,fromList,empty,keys)
 import qualified Data.Map as Map (map)
@@ -59,9 +59,11 @@ parseAndSaveAllPackages :: SourceRepository -> IO ParsedRepository
 parseAndSaveAllPackages repository = do
     putStrLn "Parsing Packages ..."
     flip traverseRepository repository (\packagename versionnumber packagepath -> do
-        packageresult <- parsePackage packagename packagepath
-        savePackage packagename versionnumber packageresult
-        return (dropFileName (instanceFilePath packagename versionnumber)))
+        packageinformationexists <- doesFileExist (infoFilePath packagename versionnumber)
+        when (not packageinformationexists) (do
+            packageresult <- parsePackage packagename packagepath
+            savePackage packagename versionnumber packageresult)
+        return (dropFileName (infoFilePath packagename versionnumber)))
 
 parsePackage :: PackageName -> FilePath -> IO PackageResult
 parsePackage packagename packagepath = runEitherT (do
@@ -137,7 +139,7 @@ savePackage packagename versionnumber packageresult = do
 
     let (packageinformation,modulemap) = interpretResult packageresult
 
-    createDirectoryWriteFile (instanceFilePath packagename versionnumber) (encode packageinformation)
+    createDirectoryWriteFile (infoFilePath packagename versionnumber) (encode packageinformation)
 
     flip traverseWithKey modulemap (\modulename moduleinformation -> do
         createDirectoryWriteFile (moduleFilePath packagename versionnumber modulename) (encode moduleinformation))
@@ -157,8 +159,8 @@ interpretModuleResult :: Either ModuleError ModuleAST -> ModuleInformation
 interpretModuleResult (Left moduleerror) = ModuleError moduleerror
 interpretModuleResult (Right moduleast) = ModuleInformation moduleast
 
-instanceFilePath :: PackageName -> VersionNumber -> FilePath
-instanceFilePath packagename versionnumber = concat [
+infoFilePath :: PackageName -> VersionNumber -> FilePath
+infoFilePath packagename versionnumber = concat [
     "data/info/",
     packagePath packagename versionnumber,
     "info.json"]
