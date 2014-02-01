@@ -11,12 +11,16 @@ import Distribution.Package (Dependency)
 
 import qualified Language.Haskell.Exts.Annotated as HSE (Module,Decl,SrcSpanInfo)
 import Language.Haskell.Exts.Extension (Language(Haskell2010))
-import Language.Haskell.Names (Symbols,annotateModule,Scoped)
+import Language.Haskell.Exts.Pretty (prettyPrint)
+import Language.Haskell.Names (Symbols(Symbols),annotateModule,Scoped)
 import Language.Haskell.Names.SyntaxUtils (getModuleDecls)
+import Language.Haskell.Names.ModuleSymbols (getTopDeclSymbols)
 
 import Distribution.ModuleName (ModuleName)
 
 import Control.Monad (forM_)
+import Data.Either (partitionEithers)
+import qualified Data.Set as Set (fromList)
 
 splitAndSaveAllDeclarations :: ParsedRepository -> IO ()
 splitAndSaveAllDeclarations parsedrepository = do
@@ -51,12 +55,20 @@ splitAnnotatedModule :: HSE.Module (Scoped HSE.SrcSpanInfo) -> [Declaration]
 splitAnnotatedModule annotatedmoduleast = map declToDeclaration (getModuleDecls annotatedmoduleast)
 
 declToDeclaration :: HSE.Decl (Scoped (HSE.SrcSpanInfo)) -> Declaration
-declToDeclaration = undefined
+declToDeclaration annotatedmoduleast = Declaration
+    Genre
+    (prettyPrint annotatedmoduleast)
+    (declaredSymbols annotatedmoduleast)
+    undefined
+
+declaredSymbols :: HSE.Decl (Scoped (HSE.SrcSpanInfo)) -> Symbols
+declaredSymbols annotatedmoduleast = Symbols (Set.fromList valuesymbols) (Set.fromList typesymbols) where
+    (valuesymbols,typesymbols) = partitionEithers (getTopDeclSymbols undefined undefined annotatedmoduleast)
 
 saveDeclarations :: PackagePath -> ModuleName -> [Declaration] -> IO ()
 saveDeclarations = undefined
 
-data Declaration = Declaration Genre DeclarationAST Symbols Symbols
-data Genre = Genre
-type DeclarationAST = HSE.Decl HSE.SrcSpanInfo
+data Declaration = Declaration Genre DeclarationAST Symbols Symbols deriving (Show,Eq)
+data Genre = Genre deriving (Show,Eq,Read)
+type DeclarationAST = String
 
