@@ -1,9 +1,12 @@
 module Fragmentation where
 
-import Common (ParsedRepository)
+import Common (ParsedRepository,traverseRepository)
 
 splitAndSaveAllDeclarations :: ParsedRepository -> IO ()
-splitAndSaveAllDeclarations parsedrepository = undefined
+splitAndSaveAllDeclarations parsedrepository = do
+    flip traverseRepository parsedrepository (\_ _ packagepath -> do
+        return ())
+    return ()
 
 
 

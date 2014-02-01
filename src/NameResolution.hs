@@ -4,7 +4,7 @@ module NameResolution where
 import Common (
     ParsedRepository,traverseRepository,
     PackageInformation(..),
-    ModuleInformation(..),ModuleAST)
+    loadPackage,recoverModules,modulenamespath)
 
 import Language.Haskell.Names (computeInterfaces,Symbols,Error)
 import Language.Haskell.Names.Interfaces (writeInterface,readInterface)
@@ -15,14 +15,12 @@ import Language.Haskell.Exts.Annotated (SrcSpanInfo)
 
 import Distribution.Package (Dependency(Dependency),PackageName(PackageName))
 import Distribution.ModuleName (ModuleName)
-import Distribution.Text (display)
 import Distribution.Version (withinRange)
 
+import qualified Data.ByteString.Lazy as ByteString (writeFile)
 import System.Directory (doesFileExist)
 
-import Data.Aeson (decode,encode,ToJSON(toJSON),object,(.=))
-
-import qualified Data.ByteString.Lazy as ByteString (readFile,writeFile)
+import Data.Aeson (encode,ToJSON(toJSON),object,(.=))
 
 import Control.Monad (when,forM_,filterM)
 import Control.Monad.Trans.Class (lift)
@@ -61,37 +59,6 @@ resolveNames parsedrepository packagepath = do
             modules <- recoverModules packagepath modulenames
             nameerrors <- runNameResolution (computeInterfaces Haskell2010 [] modules) (packagepath,parsedrepository,dependencies)
             return (NameErrors nameerrors)
-
-loadPackage :: FilePath -> IO (Maybe PackageInformation)
-loadPackage packagepath = ByteString.readFile (packagepath ++ "info.json") >>= return . decode
-
-recoverModules :: FilePath -> [ModuleName] -> IO [ModuleAST]
-recoverModules packagepath modulenames = mapM (recoverModule packagepath) modulenames >>= return . catMaybes
-
-recoverModule :: FilePath -> ModuleName -> IO (Maybe ModuleAST)
-recoverModule packagepath modulename = do
-    maybemoduleinformation <- loadModuleInformation packagepath modulename
-    case maybemoduleinformation of
-        Nothing -> return Nothing
-        Just (ModuleError _) -> return Nothing
-        Just (ModuleInformation moduleast) -> return (Just moduleast)
-
-moduleastpath :: FilePath -> ModuleName -> FilePath
-moduleastpath packagepath modulename = concat [
-    packagepath,
-    display modulename,
-    "/",
-    "ast.json"]
-
-modulenamespath :: FilePath -> ModuleName -> FilePath
-modulenamespath packagepath modulename = concat [
-    packagepath,
-    display modulename,
-    "/",
-    "names.json"]   
-
-loadModuleInformation :: FilePath -> ModuleName -> IO (Maybe ModuleInformation)
-loadModuleInformation packagepath modulename = ByteString.readFile (moduleastpath packagepath modulename) >>= return . decode
 
 saveNameErrors :: FilePath -> NameErrors -> IO ()
 saveNameErrors packagepath nameerrors = ByteString.writeFile (nameerrorspath packagepath) (encode nameerrors)

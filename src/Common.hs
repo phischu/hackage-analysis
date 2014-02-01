@@ -12,9 +12,12 @@ import Language.Haskell.Exts.Pretty (prettyPrint)
 
 import Data.Aeson (
     ToJSON(toJSON),object,(.=),
-    FromJSON(parseJSON),Value(Object),(.:))
+    decode,FromJSON(parseJSON),Value(Object),(.:))
 import Data.Aeson.Types (Parser)
 
+import qualified Data.ByteString.Lazy as ByteString (readFile)
+
+import Data.Maybe (catMaybes)
 import Data.Map (Map,traverseWithKey)
 
 import Control.Monad (mzero,mplus)
@@ -97,3 +100,36 @@ parseModuleInformation (Object o) = do
         ParseOk moduleast -> return (ModuleInformation moduleast)
         ParseFailed _ _ -> mzero
 parseModuleInformation _ = mzero
+
+type PackagePath = FilePath
+
+loadPackage :: PackagePath -> IO (Maybe PackageInformation)
+loadPackage packagepath = ByteString.readFile (packagepath ++ "info.json") >>= return . decode
+
+recoverModules :: PackagePath -> [ModuleName] -> IO [ModuleAST]
+recoverModules packagepath modulenames = mapM (recoverModule packagepath) modulenames >>= return . catMaybes
+
+recoverModule :: PackagePath -> ModuleName -> IO (Maybe ModuleAST)
+recoverModule packagepath modulename = do
+    maybemoduleinformation <- loadModuleInformation packagepath modulename
+    case maybemoduleinformation of
+        Nothing -> return Nothing
+        Just (ModuleError _) -> return Nothing
+        Just (ModuleInformation moduleast) -> return (Just moduleast)
+
+moduleastpath :: PackagePath -> ModuleName -> FilePath
+moduleastpath packagepath modulename = concat [
+    packagepath,
+    display modulename,
+    "/",
+    "ast.json"]
+
+modulenamespath :: PackagePath -> ModuleName -> FilePath
+modulenamespath packagepath modulename = concat [
+    packagepath,
+    display modulename,
+    "/",
+    "names.json"]   
+
+loadModuleInformation :: PackagePath -> ModuleName -> IO (Maybe ModuleInformation)
+loadModuleInformation packagepath modulename = ByteString.readFile (moduleastpath packagepath modulename) >>= return . decode
