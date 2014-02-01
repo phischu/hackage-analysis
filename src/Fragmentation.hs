@@ -9,9 +9,10 @@ import NameResolution (runNameResolution)
 
 import Distribution.Package (Dependency)
 
-import qualified Language.Haskell.Exts.Annotated as HSE (Decl,SrcSpanInfo)
+import qualified Language.Haskell.Exts.Annotated as HSE (Module,Decl,SrcSpanInfo)
 import Language.Haskell.Exts.Extension (Language(Haskell2010))
-import Language.Haskell.Names (Symbols,annotateModule)
+import Language.Haskell.Names (Symbols,annotateModule,Scoped)
+import Language.Haskell.Names.SyntaxUtils (getModuleDecls)
 
 import Distribution.ModuleName (ModuleName)
 
@@ -44,7 +45,13 @@ splitModule parsedrepository packagepath dependencies modulename = do
             annoatedmoduleast <- runNameResolution
                 (annotateModule Haskell2010 [] moduleast)
                 (packagepath,parsedrepository,dependencies)
-            return undefined
+            return (splitAnnotatedModule annoatedmoduleast)
+
+splitAnnotatedModule :: HSE.Module (Scoped HSE.SrcSpanInfo) -> [Declaration]
+splitAnnotatedModule annotatedmoduleast = map declToDeclaration (getModuleDecls annotatedmoduleast)
+
+declToDeclaration :: HSE.Decl (Scoped (HSE.SrcSpanInfo)) -> Declaration
+declToDeclaration = undefined
 
 saveDeclarations :: PackagePath -> ModuleName -> [Declaration] -> IO ()
 saveDeclarations = undefined
