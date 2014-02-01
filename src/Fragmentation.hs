@@ -9,12 +9,14 @@ import NameResolution (runNameResolution)
 
 import Distribution.Package (Dependency)
 
-import qualified Language.Haskell.Exts.Annotated as HSE (Module,Decl,SrcSpanInfo)
+import qualified Language.Haskell.Exts.Annotated as HSE (Module,Decl,SrcSpanInfo,ModuleName)
 import Language.Haskell.Exts.Extension (Language(Haskell2010))
 import Language.Haskell.Exts.Pretty (prettyPrint)
+
 import Language.Haskell.Names (Symbols(Symbols),annotateModule,Scoped)
-import Language.Haskell.Names.SyntaxUtils (getModuleDecls)
+import Language.Haskell.Names.SyntaxUtils (getModuleDecls,getModuleName)
 import Language.Haskell.Names.ModuleSymbols (getTopDeclSymbols)
+import qualified Language.Haskell.Names.GlobalSymbolTable as GlobalTable (empty)
 
 import Distribution.ModuleName (ModuleName)
 
@@ -49,21 +51,25 @@ splitModule parsedrepository packagepath dependencies modulename = do
             annoatedmoduleast <- runNameResolution
                 (annotateModule Haskell2010 [] moduleast)
                 (packagepath,parsedrepository,dependencies)
-            return (splitAnnotatedModule annoatedmoduleast)
+            let modulenameast = getModuleName annoatedmoduleast
+            return (splitAnnotatedModule modulenameast annoatedmoduleast)
 
-splitAnnotatedModule :: HSE.Module (Scoped HSE.SrcSpanInfo) -> [Declaration]
-splitAnnotatedModule annotatedmoduleast = map declToDeclaration (getModuleDecls annotatedmoduleast)
+splitAnnotatedModule :: HSE.ModuleName (Scoped HSE.SrcSpanInfo) -> HSE.Module (Scoped HSE.SrcSpanInfo) -> [Declaration]
+splitAnnotatedModule modulenameast annotatedmoduleast = map (declToDeclaration modulenameast) (getModuleDecls annotatedmoduleast)
 
-declToDeclaration :: HSE.Decl (Scoped (HSE.SrcSpanInfo)) -> Declaration
-declToDeclaration annotatedmoduleast = Declaration
+declToDeclaration :: HSE.ModuleName (Scoped HSE.SrcSpanInfo) -> HSE.Decl (Scoped HSE.SrcSpanInfo) -> Declaration
+declToDeclaration modulenameast annotatedmoduleast = Declaration
     Genre
     (prettyPrint annotatedmoduleast)
-    (declaredSymbols annotatedmoduleast)
-    undefined
+    (declaredSymbols modulenameast annotatedmoduleast)
+    (usedSymbols annotatedmoduleast)
 
-declaredSymbols :: HSE.Decl (Scoped (HSE.SrcSpanInfo)) -> Symbols
-declaredSymbols annotatedmoduleast = Symbols (Set.fromList valuesymbols) (Set.fromList typesymbols) where
-    (valuesymbols,typesymbols) = partitionEithers (getTopDeclSymbols undefined undefined annotatedmoduleast)
+declaredSymbols :: HSE.ModuleName (Scoped HSE.SrcSpanInfo) -> HSE.Decl (Scoped HSE.SrcSpanInfo) -> Symbols
+declaredSymbols modulenameast annotatedmoduleast = Symbols (Set.fromList valuesymbols) (Set.fromList typesymbols) where
+    (valuesymbols,typesymbols) = partitionEithers (getTopDeclSymbols GlobalTable.empty modulenameast annotatedmoduleast)
+
+usedSymbols :: HSE.Decl (Scoped HSE.SrcSpanInfo) -> Symbols
+usedSymbols = undefined
 
 saveDeclarations :: PackagePath -> ModuleName -> [Declaration] -> IO ()
 saveDeclarations = undefined
