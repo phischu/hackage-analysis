@@ -2,11 +2,16 @@ module Fragmentation where
 
 import Common (
     ParsedRepository,traverseRepository,PackagePath,
-    loadPackage,PackageInformation(PackageError,PackageInformation))
+    loadPackage,PackageInformation(PackageError,PackageInformation),
+    loadModuleInformation,ModuleInformation(ModuleError,ModuleInformation))
+
+import NameResolution (runNameResolution)
+
+import Distribution.Package (Dependency)
 
 import qualified Language.Haskell.Exts.Annotated as HSE (Decl,SrcSpanInfo)
-
-import Language.Haskell.Names (Symbols)
+import Language.Haskell.Exts.Extension (Language(Haskell2010))
+import Language.Haskell.Names (Symbols,annotateModule)
 
 import Distribution.ModuleName (ModuleName)
 
@@ -26,11 +31,20 @@ splitAndSaveDeclarations parsedrepository packagepath = do
         Just (PackageError _) -> return ()
         Just (PackageInformation modulenames dependencies) -> do
             forM_ modulenames (\modulename -> do
-                declarations <- splitModule parsedrepository packagepath modulename
+                declarations <- splitModule parsedrepository packagepath dependencies modulename
                 saveDeclarations packagepath modulename declarations)
 
-splitModule :: ParsedRepository -> PackagePath -> ModuleName -> IO [Declaration]
-splitModule = undefined
+splitModule :: ParsedRepository -> PackagePath -> [Dependency] -> ModuleName -> IO [Declaration]
+splitModule parsedrepository packagepath dependencies modulename = do
+    maybemoduleinformation <- loadModuleInformation packagepath modulename
+    case maybemoduleinformation of
+        Nothing -> return []
+        Just (ModuleError _) -> return []
+        Just (ModuleInformation moduleast) -> do
+            annoatedmoduleast <- runNameResolution
+                (annotateModule Haskell2010 [] moduleast)
+                (packagepath,parsedrepository,dependencies)
+            return undefined
 
 saveDeclarations :: PackagePath -> ModuleName -> [Declaration] -> IO ()
 saveDeclarations = undefined
