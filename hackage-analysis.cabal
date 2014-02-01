@@ -19,7 +19,8 @@ executable hackage-analysis
   other-modules:       Repository,
                        Common,
                        ParsePackage,
-                       NameResolution
+                       NameResolution,
+                       Fragmentation
   build-depends:       base,
                        containers,
                        transformers,
