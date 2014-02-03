@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 module Fragmentation where
 
 import Common (
@@ -13,16 +14,23 @@ import qualified Language.Haskell.Exts.Annotated as HSE (Module,Decl,SrcSpanInfo
 import Language.Haskell.Exts.Extension (Language(Haskell2010))
 import Language.Haskell.Exts.Pretty (prettyPrint)
 
-import Language.Haskell.Names (Symbols(Symbols),annotateModule,Scoped)
+import Language.Haskell.Names (
+    Symbols(Symbols),annotateModule,Scoped(Scoped),SymValueInfo,SymTypeInfo,OrigName,
+    NameInfo(GlobalValue,GlobalType))
 import Language.Haskell.Names.SyntaxUtils (getModuleDecls,getModuleName)
 import Language.Haskell.Names.ModuleSymbols (getTopDeclSymbols)
 import qualified Language.Haskell.Names.GlobalSymbolTable as GlobalTable (empty)
 
 import Distribution.ModuleName (ModuleName)
+import Distribution.Text (display)
 
+import Data.Aeson (encode,ToJSON(toJSON),object,(.=))
+
+import qualified Data.ByteString.Lazy as ByteString (writeFile)
 import Control.Monad (forM_)
 import Data.Either (partitionEithers)
 import qualified Data.Set as Set (fromList)
+import Data.Foldable (foldMap)
 
 splitAndSaveAllDeclarations :: ParsedRepository -> IO ()
 splitAndSaveAllDeclarations parsedrepository = do
@@ -69,12 +77,35 @@ declaredSymbols modulenameast annotatedmoduleast = Symbols (Set.fromList valuesy
     (valuesymbols,typesymbols) = partitionEithers (getTopDeclSymbols GlobalTable.empty modulenameast annotatedmoduleast)
 
 usedSymbols :: HSE.Decl (Scoped HSE.SrcSpanInfo) -> Symbols
-usedSymbols = undefined
+usedSymbols annotatedmoduleast = Symbols (Set.fromList valuesymbols) (Set.fromList typesymbols) where
+    (valuesymbols,typesymbols) = partitionEithers (foldMap externalSymbol annotatedmoduleast)
+
+externalSymbol :: Scoped HSE.SrcSpanInfo -> [Either (SymValueInfo OrigName) (SymTypeInfo OrigName)]
+externalSymbol (Scoped (GlobalValue symvalueinfo) _) = [Left symvalueinfo]
+externalSymbol (Scoped (GlobalType symtypeinfo) _) = [Right symtypeinfo]
+externalSymbol _ = []
 
 saveDeclarations :: PackagePath -> ModuleName -> [Declaration] -> IO ()
-saveDeclarations = undefined
+saveDeclarations packagepath modulename declarations =
+    ByteString.writeFile (declarationsFilePath packagepath modulename) (encode declarations)
 
-data Declaration = Declaration Genre DeclarationAST Symbols Symbols deriving (Show,Eq)
+declarationsFilePath :: PackagePath -> ModuleName -> FilePath
+declarationsFilePath packagepath modulename = concat [
+    packagepath,
+    display modulename,
+    "/",
+    "declarations.json"]
+
+data Declaration = Declaration Genre DeclarationAST DeclaredSymbols UsedSymbols deriving (Show,Eq)
 data Genre = Genre deriving (Show,Eq,Read)
 type DeclarationAST = String
+type DeclaredSymbols = Symbols
+type UsedSymbols = Symbols
+
+instance ToJSON Declaration where
+    toJSON (Declaration genre declarationast declaredsymbols usedsymbols) = object [
+        "genre" .= show genre,
+        "declarationast" .= declarationast,
+        "declaredsymbols" .= declaredsymbols,
+        "usedsymbols" .= usedsymbols]
 
