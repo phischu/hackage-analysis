@@ -61,6 +61,7 @@ parseAndSaveAllPackages repository = do
     flip traverseRepository repository (\packagename versionnumber packagepath -> do
         packageinformationexists <- doesFileExist (infoFilePath packagename versionnumber)
         when (not packageinformationexists) (do
+            putStrLn ("Parsing: " ++ packagepath)
             packageresult <- parsePackage packagename packagepath
             savePackage packagename versionnumber packageresult)
         return (dropFileName (infoFilePath packagename versionnumber)))

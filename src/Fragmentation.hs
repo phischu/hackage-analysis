@@ -11,6 +11,7 @@ import NameResolution (runNameResolution)
 import Distribution.Package (Dependency)
 
 import qualified Language.Haskell.Exts.Annotated as HSE (Module,Decl,SrcSpanInfo,ModuleName)
+import Language.Haskell.Exts.Annotated (Decl(..))
 import Language.Haskell.Exts.Extension (Language(Haskell2010))
 import Language.Haskell.Exts.Pretty (prettyPrint)
 
@@ -40,6 +41,7 @@ splitAndSaveAllDeclarations parsedrepository = do
 
 splitAndSaveDeclarations :: ParsedRepository -> PackagePath -> IO ()
 splitAndSaveDeclarations parsedrepository packagepath = do
+    putStrLn ("Fragmenting: " ++ packagepath)
     maybepackageinformation <- loadPackage packagepath
     case maybepackageinformation of
         Nothing -> return ()
@@ -67,10 +69,28 @@ splitAnnotatedModule modulenameast annotatedmoduleast = map (declToDeclaration m
 
 declToDeclaration :: HSE.ModuleName (Scoped HSE.SrcSpanInfo) -> HSE.Decl (Scoped HSE.SrcSpanInfo) -> Declaration
 declToDeclaration modulenameast annotatedmoduleast = Declaration
-    Genre
+    (declGenre annotatedmoduleast)
     (prettyPrint annotatedmoduleast)
     (declaredSymbols modulenameast annotatedmoduleast)
     (usedSymbols annotatedmoduleast)
+
+declGenre :: HSE.Decl (Scoped HSE.SrcSpanInfo) -> Genre
+declGenre (TypeDecl _ _ _) = Type
+declGenre (TypeFamDecl _ _ _) = Type
+declGenre (DataDecl _ _ _ _ _ _) = Type
+declGenre (GDataDecl _ _ _ _ _ _ _) = Type
+declGenre (DataFamDecl _ _ _ _) = Type
+declGenre (TypeInsDecl _ _ _) = Type
+declGenre (DataInsDecl _ _ _ _ _) = Type
+declGenre (GDataInsDecl _ _ _ _ _ _) = Type
+declGenre (ClassDecl _ _ _ _ _) = TypeClass
+declGenre (InstDecl _ _ _ _) = ClassInstance
+declGenre (DerivDecl _ _ _) = ClassInstance
+declGenre (TypeSig _ _ _) = TypeSignature
+declGenre (FunBind _ _) = Value
+declGenre (PatBind _ _ _ _ _) = Value
+declGenre (ForImp _ _ _ _ _ _) = Value
+declGenre _ = Other
 
 declaredSymbols :: HSE.ModuleName (Scoped HSE.SrcSpanInfo) -> HSE.Decl (Scoped HSE.SrcSpanInfo) -> Symbols
 declaredSymbols modulenameast annotatedmoduleast = Symbols (Set.fromList valuesymbols) (Set.fromList typesymbols) where
@@ -97,7 +117,7 @@ declarationsFilePath packagepath modulename = concat [
     "declarations.json"]
 
 data Declaration = Declaration Genre DeclarationAST DeclaredSymbols UsedSymbols deriving (Show,Eq)
-data Genre = Genre deriving (Show,Eq,Read)
+data Genre = Value | TypeSignature | Type | TypeClass | ClassInstance | Other deriving (Show,Eq,Read)
 type DeclarationAST = String
 type DeclaredSymbols = Symbols
 type UsedSymbols = Symbols
