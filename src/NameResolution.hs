@@ -5,9 +5,9 @@ import Common (
     ParsedRepository,traverseRepository,
     PackageInformation(..),
     loadPackage,recoverModules,modulenamespath,
-    NameErrors(ResolvingNames,NameErrors))
+    NameErrors(ResolvingNames,NameErrors),nameerrorspath)
 
-import Language.Haskell.Names (computeInterfaces,Symbols,Error)
+import Language.Haskell.Names (computeInterfaces,Symbols,Error,ppError)
 import Language.Haskell.Names.Interfaces (writeInterface,readInterface)
 import Distribution.HaskellSuite.Modules (
     MonadModule(..),convertModuleName,modToString)
@@ -29,7 +29,7 @@ import Control.Monad.Trans.Reader (ReaderT,runReaderT,ask)
 
 import Data.Maybe (catMaybes,listToMaybe)
 import Data.Set (Set,empty)
-import qualified Data.Set as Set (map)
+import qualified Data.Set as Set (map,toList)
 import Data.Map (Map,traverseWithKey)
 import qualified Data.Map as Map (lookup,fromList,toAscList)
 
@@ -53,19 +53,16 @@ resolveNames :: ParsedRepository -> FilePath -> IO NameErrors
 resolveNames parsedrepository packagepath = do
     maybepackageinformation <- loadPackage packagepath
     case maybepackageinformation of
-        Nothing -> return (NameErrors empty)
-        Just (PackageError _) -> return (NameErrors empty)
+        Nothing -> return (NameErrors [])
+        Just (PackageError _) -> return (NameErrors [])
         Just (PackageInformation modulenames dependencies) -> do
             resolveDependencies parsedrepository dependencies
             modules <- recoverModules packagepath modulenames
             nameerrors <- runNameResolution (computeInterfaces Haskell2010 [] modules) (packagepath,parsedrepository,dependencies)
-            return (NameErrors nameerrors)
+            return (NameErrors (map ppError (Set.toList nameerrors)))
 
 saveNameErrors :: FilePath -> NameErrors -> IO ()
 saveNameErrors packagepath nameerrors = ByteString.writeFile (nameerrorspath packagepath) (encode nameerrors)
-
-nameerrorspath :: FilePath -> FilePath
-nameerrorspath packagepath = packagepath ++ "nameerrors.json"
 
 resolveDependencies :: ParsedRepository -> [Dependency] -> IO ()
 resolveDependencies parsedrepository dependencies =

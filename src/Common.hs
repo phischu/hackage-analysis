@@ -27,7 +27,7 @@ import Data.Map (Map,traverseWithKey)
 import Data.Set (Set)
 import qualified Data.Set as Set (map)
 
-import Control.Monad (mzero,mplus)
+import Control.Monad (mzero,mplus,msum)
 
 type Repository a = Map PackageName (Map VersionNumber a)
 type SourceRepository = Repository FilePath
@@ -178,8 +178,20 @@ loadDeclarations packagepath modulename = ByteString.readFile (declarationsFileP
 
 data NameErrors =
     ResolvingNames |
-    NameErrors (Set (Error HSE.SrcSpanInfo))
+    NameErrors [String]
 
 instance ToJSON NameErrors where
     toJSON ResolvingNames = object ["resolvingnames" .= True]
-    toJSON (NameErrors nameerrors) = object ["nameerrors" .= Set.map show nameerrors]
+    toJSON (NameErrors nameerrors) = object ["nameerrors" .= nameerrors]
+
+instance FromJSON NameErrors where
+    parseJSON (Object o) = msum [
+        o .: "resolvingnames" >>= (\True -> return ResolvingNames),
+        o .: "nameerrors" >>= return . NameErrors]
+    parseJSON _ = mzero
+
+nameerrorspath :: FilePath -> FilePath
+nameerrorspath packagepath = packagepath ++ "nameerrors.json"
+
+loadNameErrors :: PackagePath -> IO (Maybe NameErrors)
+loadNameErrors packagepath = ByteString.readFile (nameerrorspath packagepath) >>= return . decode

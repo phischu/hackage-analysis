@@ -3,11 +3,9 @@ module Insertion where
 import Common (
     ParsedRepository,traverseRepository,PackagePath,
     PackageName,VersionNumber,
-    PackageInformation(PackageError,PackageInformation),PackageError,
-    ModuleInformation(ModuleError,ModuleInformation),ModuleError(..),
-    loadModuleInformation,
-    loadDeclarations,Declaration,NameErrors,
-    loadPackage)
+    PackageInformation(PackageError,PackageInformation),PackageError,loadPackage,
+    ModuleInformation(ModuleError,ModuleInformation),ModuleError(..),loadModuleInformation,
+    loadDeclarations,Declaration,NameErrors,loadNameErrors)
 
 import Distribution.ModuleName (ModuleName)
 import Distribution.Package (Dependency)
@@ -40,9 +38,6 @@ loadModuleDeclarations packagepath modulenames = forM modulenames (\modulename -
             case maybedeclarations of
                 Nothing -> return (modulename,Left DeclarationsFileError)
                 Just declarations -> return (modulename,Right declarations))
-
-loadNameErrors :: PackagePath -> IO (Maybe NameErrors)
-loadNameErrors = undefined
 
 insertPackage ::
     PackageName ->
