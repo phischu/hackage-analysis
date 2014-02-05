@@ -5,7 +5,7 @@ import Common (
     ParsedRepository,traverseRepository,PackagePath,
     loadPackage,PackageInformation(PackageError,PackageInformation),
     loadModuleInformation,ModuleInformation(ModuleError,ModuleInformation),
-    Declaration(Declaration),Genre(..))
+    Declaration(Declaration),declarationsFilePath,Genre(..))
 
 import NameResolution (runNameResolution)
 
@@ -109,11 +109,4 @@ externalSymbol _ = []
 saveDeclarations :: PackagePath -> ModuleName -> [Declaration] -> IO ()
 saveDeclarations packagepath modulename declarations =
     ByteString.writeFile (declarationsFilePath packagepath modulename) (encode declarations)
-
-declarationsFilePath :: PackagePath -> ModuleName -> FilePath
-declarationsFilePath packagepath modulename = concat [
-    packagepath,
-    display modulename,
-    "/",
-    "declarations.json"]
 

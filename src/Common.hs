@@ -53,7 +53,9 @@ data ModuleError =
     ModuleFileNotFound |
     MultipleModuleFilesFound |
     PreprocessorError String |
-    ParserError String deriving (Eq,Show,Read)
+    ParserError String |
+    ModuleInformationFileError |
+    DeclarationsFileError deriving (Eq,Show,Read)
 
 data PackageInformation =
     PackageError PackageError |
@@ -154,6 +156,25 @@ instance ToJSON Declaration where
         "declarationast" .= declarationast,
         "declaredsymbols" .= declaredsymbols,
         "usedsymbols" .= usedsymbols]
+
+instance FromJSON Declaration where
+    parseJSON (Object o) = do
+        genre <- o .: "genre" >>= return . read
+        declarationast <- o .: "declarationast"
+        declaredsymbols <- o .: "declaredsymbols"
+        usedsymbols <- o .: "usedsymbols"
+        return (Declaration genre declarationast declaredsymbols usedsymbols)
+    parseJSON _ = mzero
+
+declarationsFilePath :: PackagePath -> ModuleName -> FilePath
+declarationsFilePath packagepath modulename = concat [
+    packagepath,
+    display modulename,
+    "/",
+    "declarations.json"]
+
+loadDeclarations :: PackagePath -> ModuleName -> IO (Maybe [Declaration])
+loadDeclarations packagepath modulename = ByteString.readFile (declarationsFilePath packagepath modulename) >>= return . decode
 
 data NameErrors =
     ResolvingNames |

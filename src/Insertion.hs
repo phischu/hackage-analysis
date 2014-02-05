@@ -4,7 +4,9 @@ import Common (
     ParsedRepository,traverseRepository,PackagePath,
     PackageName,VersionNumber,
     PackageInformation(PackageError,PackageInformation),PackageError,
-    ModuleError,Declaration,NameErrors,
+    ModuleInformation(ModuleError,ModuleInformation),ModuleError(..),
+    loadModuleInformation,
+    loadDeclarations,Declaration,NameErrors,
     loadPackage)
 
 import Distribution.ModuleName (ModuleName)
@@ -13,7 +15,7 @@ import Distribution.Package (Dependency)
 import Data.Map (Map)
 import qualified Data.Map as Map (fromList)
 
-import Control.Monad (void)
+import Control.Monad (void,forM)
 
 insertAllPackages :: ParsedRepository -> IO ()
 insertAllPackages =
@@ -28,7 +30,16 @@ insertAllPackages =
                 insertPackage packagename versionnumber dependencies modulemap maybenameerrors))
 
 loadModuleDeclarations :: PackagePath -> [ModuleName] -> IO [(ModuleName,Either ModuleError [Declaration])]
-loadModuleDeclarations = undefined
+loadModuleDeclarations packagepath modulenames = forM modulenames (\modulename -> do
+    maybemoduleinformation <- loadModuleInformation packagepath modulename
+    case maybemoduleinformation of
+        Nothing -> return (modulename,Left ModuleInformationFileError)
+        Just (ModuleError moduleerror) -> return (modulename,Left moduleerror)
+        Just (ModuleInformation _) -> do
+            maybedeclarations <- loadDeclarations packagepath modulename
+            case maybedeclarations of
+                Nothing -> return (modulename,Left DeclarationsFileError)
+                Just declarations -> return (modulename,Right declarations))
 
 loadNameErrors :: PackagePath -> IO (Maybe NameErrors)
 loadNameErrors = undefined
