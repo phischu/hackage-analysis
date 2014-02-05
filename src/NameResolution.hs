@@ -4,7 +4,8 @@ module NameResolution where
 import Common (
     ParsedRepository,traverseRepository,
     PackageInformation(..),
-    loadPackage,recoverModules,modulenamespath)
+    loadPackage,recoverModules,modulenamespath,
+    NameErrors(ResolvingNames,NameErrors))
 
 import Language.Haskell.Names (computeInterfaces,Symbols,Error)
 import Language.Haskell.Names.Interfaces (writeInterface,readInterface)
@@ -41,10 +42,10 @@ resolveAndSaveAllPackageNames parsedrepository = do
 
 resolveNamesAndSaveNameErrors :: ParsedRepository ->  FilePath -> IO ()
 resolveNamesAndSaveNameErrors parsedrepository packagepath = do
-    putStrLn ("Resolving: " ++ packagepath)
     nameerrorsexist <- doesFileExist (nameerrorspath packagepath) 
     when (not nameerrorsexist) (do
         saveNameErrors packagepath ResolvingNames
+        putStrLn ("Resolving: " ++ packagepath)
         nameerrors <- resolveNames parsedrepository packagepath
         saveNameErrors packagepath nameerrors)
 
@@ -113,13 +114,4 @@ findModules packagepath = do
         (Just (PackageInformation modulenames _)) -> do
             let modulelist = map (\modulename -> (modulename,modulenamespath packagepath modulename)) modulenames
             filterM (\(_,path) -> doesFileExist path) modulelist
-
-data NameErrors =
-    ResolvingNames |
-    NameErrors (Set (Error SrcSpanInfo))
-
-instance ToJSON NameErrors where
-    toJSON ResolvingNames = object ["resolvingnames" .= True]
-    toJSON (NameErrors nameerrors) = object ["nameerrors" .= Set.map show nameerrors]
-
 

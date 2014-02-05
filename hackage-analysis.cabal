@@ -20,7 +20,8 @@ executable hackage-analysis
                        Common,
                        ParsePackage,
                        NameResolution,
-                       Fragmentation
+                       Fragmentation,
+                       Insertion
   build-depends:       base,
                        containers,
                        transformers,

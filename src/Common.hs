@@ -7,8 +7,13 @@ import Distribution.ModuleName (ModuleName)
 import Distribution.Text (display,simpleParse)
 
 import qualified Language.Haskell.Exts.Annotated as HSE (Module,SrcSpanInfo)
-import Language.Haskell.Exts.Annotated (parseModule,ParseResult(ParseOk,ParseFailed))
+import Language.Haskell.Exts.Annotated (parseModuleWithMode,ParseResult(ParseOk,ParseFailed))
+import Language.Haskell.Exts.Annotated.Fixity (baseFixities)
+import Language.Haskell.Exts.Parser (ParseMode(fixities),defaultParseMode)
 import Language.Haskell.Exts.Pretty (prettyPrint)
+
+import Language.Haskell.Names (Symbols,Error)
+import Language.Haskell.Names.Interfaces ()
 
 import Data.Aeson (
     ToJSON(toJSON),object,(.=),
@@ -19,6 +24,8 @@ import qualified Data.ByteString.Lazy as ByteString (readFile)
 
 import Data.Maybe (catMaybes)
 import Data.Map (Map,traverseWithKey)
+import Data.Set (Set)
+import qualified Data.Set as Set (map)
 
 import Control.Monad (mzero,mplus)
 
@@ -96,7 +103,8 @@ parseModuleError _ = mzero
 parseModuleInformation :: Value -> Parser ModuleInformation
 parseModuleInformation (Object o) = do
     moduleastvalue <- o .: "moduleast"
-    case parseModule moduleastvalue of
+    let mode = defaultParseMode {fixities = Just baseFixities}
+    case parseModuleWithMode mode moduleastvalue of
         ParseOk moduleast -> return (ModuleInformation moduleast)
         ParseFailed _ _ -> mzero
 parseModuleInformation _ = mzero
@@ -133,3 +141,24 @@ modulenamespath packagepath modulename = concat [
 
 loadModuleInformation :: PackagePath -> ModuleName -> IO (Maybe ModuleInformation)
 loadModuleInformation packagepath modulename = ByteString.readFile (moduleastpath packagepath modulename) >>= return . decode
+
+data Declaration = Declaration Genre DeclarationAST DeclaredSymbols UsedSymbols deriving (Show,Eq)
+data Genre = Value | TypeSignature | Type | TypeClass | ClassInstance | Other deriving (Show,Eq,Read)
+type DeclarationAST = String
+type DeclaredSymbols = Symbols
+type UsedSymbols = Symbols
+
+instance ToJSON Declaration where
+    toJSON (Declaration genre declarationast declaredsymbols usedsymbols) = object [
+        "genre" .= show genre,
+        "declarationast" .= declarationast,
+        "declaredsymbols" .= declaredsymbols,
+        "usedsymbols" .= usedsymbols]
+
+data NameErrors =
+    ResolvingNames |
+    NameErrors (Set (Error HSE.SrcSpanInfo))
+
+instance ToJSON NameErrors where
+    toJSON ResolvingNames = object ["resolvingnames" .= True]
+    toJSON (NameErrors nameerrors) = object ["nameerrors" .= Set.map show nameerrors]

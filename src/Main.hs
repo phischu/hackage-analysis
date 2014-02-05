@@ -4,6 +4,7 @@ import Repository (loadRepository)
 import ParsePackage (parseAndSaveAllPackages)
 import NameResolution (resolveAndSaveAllPackageNames)
 import Fragmentation (splitAndSaveAllDeclarations)
+import Insertion (insertAllPackages)
 
 main :: IO ()
 main = do
@@ -11,4 +12,5 @@ main = do
     parsedrepository <- parseAndSaveAllPackages sourcerepository
     resolveAndSaveAllPackageNames parsedrepository
     splitAndSaveAllDeclarations parsedrepository
+    insertAllPackages parsedrepository
     putStrLn "done"

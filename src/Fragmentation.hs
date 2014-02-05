@@ -4,7 +4,8 @@ module Fragmentation where
 import Common (
     ParsedRepository,traverseRepository,PackagePath,
     loadPackage,PackageInformation(PackageError,PackageInformation),
-    loadModuleInformation,ModuleInformation(ModuleError,ModuleInformation))
+    loadModuleInformation,ModuleInformation(ModuleError,ModuleInformation),
+    Declaration(Declaration),Genre(..))
 
 import NameResolution (runNameResolution)
 
@@ -115,17 +116,4 @@ declarationsFilePath packagepath modulename = concat [
     display modulename,
     "/",
     "declarations.json"]
-
-data Declaration = Declaration Genre DeclarationAST DeclaredSymbols UsedSymbols deriving (Show,Eq)
-data Genre = Value | TypeSignature | Type | TypeClass | ClassInstance | Other deriving (Show,Eq,Read)
-type DeclarationAST = String
-type DeclaredSymbols = Symbols
-type UsedSymbols = Symbols
-
-instance ToJSON Declaration where
-    toJSON (Declaration genre declarationast declaredsymbols usedsymbols) = object [
-        "genre" .= show genre,
-        "declarationast" .= declarationast,
-        "declaredsymbols" .= declaredsymbols,
-        "usedsymbols" .= usedsymbols]
 
