@@ -26,10 +26,12 @@ import qualified Language.Haskell.Names.GlobalSymbolTable as GlobalTable (empty)
 import Distribution.ModuleName (ModuleName)
 import Distribution.Text (display)
 
+import System.Directory (doesFileExist)
+
 import Data.Aeson (encode,ToJSON(toJSON),object,(.=))
 
 import qualified Data.ByteString.Lazy as ByteString (writeFile)
-import Control.Monad (forM_)
+import Control.Monad (forM_,when)
 import Data.Either (partitionEithers)
 import qualified Data.Set as Set (fromList)
 import Data.Foldable (foldMap)
@@ -49,8 +51,10 @@ splitAndSaveDeclarations parsedrepository packagepath = do
         Just (PackageError _) -> return ()
         Just (PackageInformation modulenames dependencies) -> do
             forM_ modulenames (\modulename -> do
-                declarations <- splitModule parsedrepository packagepath dependencies modulename
-                saveDeclarations packagepath modulename declarations)
+                declarationsexist <- doesFileExist (declarationsFilePath packagepath modulename) 
+                when (not declarationsexist) (do
+                    declarations <- splitModule parsedrepository packagepath dependencies modulename
+                    saveDeclarations packagepath modulename declarations))
 
 splitModule :: ParsedRepository -> PackagePath -> [Dependency] -> ModuleName -> IO [Declaration]
 splitModule parsedrepository packagepath dependencies modulename = do
