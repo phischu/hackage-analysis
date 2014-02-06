@@ -11,7 +11,8 @@ import Common (
 import Web.Neo (NeoT,defaultRunNeoT,cypher)
 
 import Distribution.ModuleName (ModuleName)
-import Distribution.Package (Dependency)
+import Distribution.Package (Dependency(Dependency))
+import Distribution.Text (display)
 
 import Data.Aeson (object,(.=))
 
@@ -65,8 +66,15 @@ insertPackageError packagename versionnumber packageerror = return ()
 insertDependencies :: (Monad m) => PackageName -> VersionNumber -> [Dependency] -> NeoT m ()
 insertDependencies packagename versionnumber dependencies = do
     cypher
-        ""
-        (object [])
+        "MERGE (rootnode:ROOTNODE)\
+        \CREATE UNIQUE (rootnode)-[:PACKAGE]->(package {packagename : {packagename}})\
+        \CREATE UNIQUE (package)-[:VERSION]->(version {versionnumber : {versionnumber}})\
+        \CREATE UNIQUE (rootnode)-[:PACKAGE]->(otherpackage {packagename : {dependencyname}})\
+        \CREATE UNIQUE (version)-[:DEPENDENCY]->(otherpackage)"
+        (object [
+            "packagename" .= packagename,
+            "versionnumber" .= display versionnumber,
+            "dependencyname" .= map (\(Dependency dependencyname _) -> dependencyname) dependencies])
     return ()
 
 splitModuleMap :: Map ModuleName (Either ModuleError [Declaration]) -> (Map ModuleName ModuleError,Map ModuleName [Declaration])
