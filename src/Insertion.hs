@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 module Insertion where
 
 import Common (
@@ -7,10 +8,12 @@ import Common (
     ModuleInformation(ModuleError,ModuleInformation),ModuleError(..),loadModuleInformation,
     loadDeclarations,Declaration,NameErrors,loadNameErrors)
 
-import Web.Neo (NeoT,defaultRunNeoT)
+import Web.Neo (NeoT,defaultRunNeoT,cypher)
 
 import Distribution.ModuleName (ModuleName)
 import Distribution.Package (Dependency)
+
+import Data.Aeson (object,(.=))
 
 import Data.Map (Map,traverseWithKey)
 import qualified Data.Map as Map (fromList)
@@ -57,10 +60,14 @@ insertPackage packagename versionnumber dependencies modulemap maybenameerrors =
     return ()) >>= print
 
 insertPackageError :: PackageName -> VersionNumber -> PackageError -> IO ()
-insertPackageError = undefined
+insertPackageError packagename versionnumber packageerror = return ()
 
 insertDependencies :: (Monad m) => PackageName -> VersionNumber -> [Dependency] -> NeoT m ()
-insertDependencies = undefined
+insertDependencies packagename versionnumber dependencies = do
+    cypher
+        ""
+        (object [])
+    return ()
 
 splitModuleMap :: Map ModuleName (Either ModuleError [Declaration]) -> (Map ModuleName ModuleError,Map ModuleName [Declaration])
 splitModuleMap = undefined
