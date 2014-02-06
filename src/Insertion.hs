@@ -7,10 +7,12 @@ import Common (
     ModuleInformation(ModuleError,ModuleInformation),ModuleError(..),loadModuleInformation,
     loadDeclarations,Declaration,NameErrors,loadNameErrors)
 
+import Web.Neo (NeoT,defaultRunNeoT)
+
 import Distribution.ModuleName (ModuleName)
 import Distribution.Package (Dependency)
 
-import Data.Map (Map)
+import Data.Map (Map,traverseWithKey)
 import qualified Data.Map as Map (fromList)
 
 import Control.Monad (void,forM)
@@ -46,8 +48,29 @@ insertPackage ::
     Map ModuleName (Either ModuleError [Declaration]) ->
     Maybe NameErrors ->
     IO ()
-insertPackage = undefined
+insertPackage packagename versionnumber dependencies modulemap maybenameerrors = defaultRunNeoT (do
+    insertDependencies packagename versionnumber dependencies
+    let (moduleerrormap,declarationsmap) = splitModuleMap modulemap
+    traverseWithKey (\modulename declarations -> insertDeclarations packagename versionnumber modulename declarations) declarationsmap
+    traverseWithKey (\modulename moduleerror -> insertModuleError packagename versionnumber modulename moduleerror) moduleerrormap
+    insertNameErrors packagename versionnumber maybenameerrors
+    return ()) >>= print
 
 insertPackageError :: PackageName -> VersionNumber -> PackageError -> IO ()
 insertPackageError = undefined
+
+insertDependencies :: (Monad m) => PackageName -> VersionNumber -> [Dependency] -> NeoT m ()
+insertDependencies = undefined
+
+splitModuleMap :: Map ModuleName (Either ModuleError [Declaration]) -> (Map ModuleName ModuleError,Map ModuleName [Declaration])
+splitModuleMap = undefined
+
+insertDeclarations :: (Monad m) => PackageName -> VersionNumber -> ModuleName -> [Declaration] -> NeoT m ()
+insertDeclarations = undefined
+
+insertModuleError :: (Monad m) => PackageName -> VersionNumber -> ModuleName -> ModuleError -> NeoT m ()
+insertModuleError = undefined
+
+insertNameErrors :: (Monad m) => PackageName -> VersionNumber -> Maybe NameErrors -> NeoT m ()
+insertNameErrors = undefined
 
