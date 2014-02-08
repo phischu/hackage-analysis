@@ -16,10 +16,10 @@ import Distribution.Text (display)
 
 import Data.Aeson (object,(.=))
 
-import Data.Map (Map,traverseWithKey)
+import Data.Map (Map,traverseWithKey,mapEither)
 import qualified Data.Map as Map (fromList)
 
-import Control.Monad (void,forM)
+import Control.Monad (void,forM,forM_)
 
 insertAllPackages :: ParsedRepository -> IO ()
 insertAllPackages =
@@ -65,27 +65,27 @@ insertPackageError packagename versionnumber packageerror = return ()
 
 insertDependencies :: (Monad m) => PackageName -> VersionNumber -> [Dependency] -> NeoT m ()
 insertDependencies packagename versionnumber dependencies = do
-    cypher
-        "MERGE (rootnode:ROOTNODE)\
-        \CREATE UNIQUE (rootnode)-[:PACKAGE]->(package {packagename : {packagename}})\
-        \CREATE UNIQUE (package)-[:VERSION]->(version {versionnumber : {versionnumber}})\
-        \CREATE UNIQUE (rootnode)-[:PACKAGE]->(otherpackage {packagename : {dependencyname}})\
-        \CREATE UNIQUE (version)-[:DEPENDENCY]->(otherpackage)"
-        (object [
-            "packagename" .= packagename,
-            "versionnumber" .= display versionnumber,
-            "dependencyname" .= map (\(Dependency dependencyname _) -> dependencyname) dependencies])
-    return ()
+    forM_ dependencies (\(Dependency dependencyname _) -> do
+        cypher
+            "MERGE (rootnode:ROOTNODE)\
+            \CREATE UNIQUE (rootnode)-[:PACKAGE]->(package {packagename : {packagename}})\
+            \CREATE UNIQUE (package)-[:VERSION]->(version {versionnumber : {versionnumber}})\
+            \CREATE UNIQUE (rootnode)-[:PACKAGE]->(otherpackage {packagename : {dependencyname}})\
+            \CREATE UNIQUE (version)-[:DEPENDENCY]->(otherpackage)"
+            (object [
+                "packagename" .= packagename,
+                "versionnumber" .= display versionnumber,
+                "dependencyname" .= dependencyname]))
 
 splitModuleMap :: Map ModuleName (Either ModuleError [Declaration]) -> (Map ModuleName ModuleError,Map ModuleName [Declaration])
-splitModuleMap = undefined
+splitModuleMap = mapEither id
 
 insertDeclarations :: (Monad m) => PackageName -> VersionNumber -> ModuleName -> [Declaration] -> NeoT m ()
-insertDeclarations = undefined
+insertDeclarations packagename versionnumber modulename declarations = return ()
 
 insertModuleError :: (Monad m) => PackageName -> VersionNumber -> ModuleName -> ModuleError -> NeoT m ()
-insertModuleError = undefined
+insertModuleError packagename versionnumber modulename moduleerror = return ()
 
 insertNameErrors :: (Monad m) => PackageName -> VersionNumber -> Maybe NameErrors -> NeoT m ()
-insertNameErrors = undefined
+insertNameErrors packagename versionnumber maybenameerrors = return ()
 
