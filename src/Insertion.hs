@@ -68,9 +68,9 @@ insertDependencies packagename versionnumber dependencies = do
     forM_ dependencies (\(Dependency dependencyname _) -> do
         cypher
             "MERGE (rootnode:ROOTNODE)\
-            \CREATE UNIQUE (rootnode)-[:PACKAGE]->(package {packagename : {packagename}})\
-            \CREATE UNIQUE (package)-[:VERSION]->(version {versionnumber : {versionnumber}})\
-            \CREATE UNIQUE (rootnode)-[:PACKAGE]->(otherpackage {packagename : {dependencyname}})\
+            \CREATE UNIQUE (rootnode)-[:PACKAGE]->(package:Package {packagename : {packagename}})\
+            \CREATE UNIQUE (package)-[:VERSION]->(version:Version {versionnumber : {versionnumber}})\
+            \CREATE UNIQUE (rootnode)-[:PACKAGE]->(otherpackage:Package {packagename : {dependencyname}})\
             \CREATE UNIQUE (version)-[:DEPENDENCY]->(otherpackage)"
             (object [
                 "packagename" .= packagename,
