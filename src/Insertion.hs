@@ -6,7 +6,7 @@ import Common (
     PackageName,VersionNumber,
     PackageInformation(PackageError,PackageInformation),PackageError,loadPackage,
     ModuleInformation(ModuleError,ModuleInformation),ModuleError(..),loadModuleInformation,
-    loadDeclarations,Declaration,NameErrors,loadNameErrors)
+    loadDeclarations,Declaration,NameErrors(NameErrors),loadNameErrors)
 
 import Web.Neo (NeoT,defaultRunNeoT,cypher)
 
@@ -99,5 +99,16 @@ insertModuleError packagename versionnumber modulename moduleerror = do
     return ()
 
 insertNameErrors :: (Monad m) => PackageName -> VersionNumber -> Maybe NameErrors -> NeoT m ()
-insertNameErrors packagename versionnumber maybenameerrors = return ()
+insertNameErrors packagename versionnumber (Just (NameErrors nameerrors)) = do
+    forM_ nameerrors (\nameerror -> do
+        cypher
+            "MERGE (rootnode:ROOTNODE)\
+            \CREATE UNIQUE (rootnode)-[:PACKAGE]->(package:Package {packagename : {packagename}})\
+            \CREATE UNIQUE (package)-[:VERSION]->(version:Version {versionnumber : {versionnumber}})\
+            \CREATE UNIQUE (version)-[:NAMEERROR]->(nameerror:NameError {nameerror : {nameerror}})"
+            (object [
+                "packagename" .= packagename,
+                "versionnumber" .= display versionnumber,
+                "nameerror" .= nameerror]))
+insertNameErrors _ _ _ = return ()
 
