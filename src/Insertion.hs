@@ -84,7 +84,19 @@ insertDeclarations :: (Monad m) => PackageName -> VersionNumber -> ModuleName ->
 insertDeclarations packagename versionnumber modulename declarations = return ()
 
 insertModuleError :: (Monad m) => PackageName -> VersionNumber -> ModuleName -> ModuleError -> NeoT m ()
-insertModuleError packagename versionnumber modulename moduleerror = return ()
+insertModuleError packagename versionnumber modulename moduleerror = do
+    cypher
+        "MERGE (rootnode:ROOTNODE)\
+        \CREATE UNIQUE (rootnode)-[:PACKAGE]->(package:Package {packagename : {packagename}})\
+        \CREATE UNIQUE (package)-[:VERSION]->(version:Version {versionnumber : {versionnumber}})\
+        \CREATE UNIQUE (version)-[:MODULE]->(module:Module {modulenname : {modulename}})\
+        \CREATE UNIQUE (module)-[:MODULEERROR]->(moduleerror:ModuleError {moduleerror : {moduleerror}})"
+        (object [
+            "packagename" .= packagename,
+            "versionnumber" .= display versionnumber,
+            "modulename" .= display modulename,
+            "moduleerror" .= show moduleerror])
+    return ()
 
 insertNameErrors :: (Monad m) => PackageName -> VersionNumber -> Maybe NameErrors -> NeoT m ()
 insertNameErrors packagename versionnumber maybenameerrors = return ()
