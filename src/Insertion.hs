@@ -65,17 +65,18 @@ insertPackageError packagename versionnumber packageerror = return ()
 
 insertDependencies :: (Monad m) => PackageName -> VersionNumber -> [Dependency] -> NeoT m ()
 insertDependencies packagename versionnumber dependencies = do
-    forM_ dependencies (\(Dependency dependencyname _) -> do
-        cypher
-            "MERGE (rootnode:ROOTNODE)\
-            \CREATE UNIQUE (rootnode)-[:PACKAGE]->(package:Package {packagename : {packagename}})\
-            \CREATE UNIQUE (package)-[:VERSION]->(version:Version {versionnumber : {versionnumber}})\
-            \CREATE UNIQUE (rootnode)-[:PACKAGE]->(otherpackage:Package {packagename : {dependencyname}})\
-            \CREATE UNIQUE (version)-[:DEPENDENCY]->(otherpackage)"
-            (object [
-                "packagename" .= packagename,
-                "versionnumber" .= display versionnumber,
-                "dependencyname" .= dependencyname]))
+    cypher
+        "MERGE (rootnode:ROOTNODE)\
+        \CREATE UNIQUE (rootnode)-[:PACKAGE]->(package:Package {packagename : {packagename}})\
+        \CREATE UNIQUE (package)-[:VERSION]->(version:Version {versionnumber : {versionnumber}})\
+        \FOREACH (dependencyname IN dependencynames |\
+        \    CREATE UNIQUE (rootnode)-[:PACKAGE]->(otherpackage:Package {packagename : {dependencyname}})\
+        \    CREATE UNIQUE (version)-[:DEPENDENCY]->(otherpackage))"
+        (object [
+            "packagename" .= packagename,
+            "versionnumber" .= display versionnumber,
+            "dependencynames" .= map (\(Dependency dependencyname _) -> dependencyname) dependencies])
+    return ()
 
 splitModuleMap :: Map ModuleName (Either ModuleError [Declaration]) -> (Map ModuleName ModuleError,Map ModuleName [Declaration])
 splitModuleMap = mapEither id
@@ -100,15 +101,16 @@ insertModuleError packagename versionnumber modulename moduleerror = do
 
 insertNameErrors :: (Monad m) => PackageName -> VersionNumber -> Maybe NameErrors -> NeoT m ()
 insertNameErrors packagename versionnumber (Just (NameErrors nameerrors)) = do
-    forM_ nameerrors (\nameerror -> do
-        cypher
-            "MERGE (rootnode:ROOTNODE)\
-            \CREATE UNIQUE (rootnode)-[:PACKAGE]->(package:Package {packagename : {packagename}})\
-            \CREATE UNIQUE (package)-[:VERSION]->(version:Version {versionnumber : {versionnumber}})\
-            \CREATE UNIQUE (version)-[:NAMEERROR]->(nameerror:NameError {nameerror : {nameerror}})"
-            (object [
-                "packagename" .= packagename,
-                "versionnumber" .= display versionnumber,
-                "nameerror" .= nameerror]))
+    cypher
+        "MERGE (rootnode:ROOTNODE)\
+        \CREATE UNIQUE (rootnode)-[:PACKAGE]->(package:Package {packagename : {packagename}})\
+        \CREATE UNIQUE (package)-[:VERSION]->(version:Version {versionnumber : {versionnumber}})\
+        \FOREACH (nameerror IN nameerrors |\
+        \    CREATE UNIQUE (version)-[:NAMEERROR]->(nameerror:NameError {nameerror : {nameerror}}))"
+        (object [
+            "packagename" .= packagename,
+            "versionnumber" .= display versionnumber,
+            "nameerrors" .= nameerrors])
+    return ()
 insertNameErrors _ _ _ = return ()
 
