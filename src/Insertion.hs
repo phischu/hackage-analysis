@@ -52,16 +52,29 @@ insertPackage ::
     Map ModuleName (Either ModuleError [Declaration]) ->
     Maybe NameErrors ->
     IO ()
-insertPackage packagename versionnumber dependencies modulemap maybenameerrors = defaultRunNeoT (do
-    insertDependencies packagename versionnumber dependencies
-    let (moduleerrormap,declarationsmap) = splitModuleMap modulemap
-    traverseWithKey (\modulename declarations -> insertDeclarations packagename versionnumber modulename declarations) declarationsmap
-    traverseWithKey (\modulename moduleerror -> insertModuleError packagename versionnumber modulename moduleerror) moduleerrormap
-    insertNameErrors packagename versionnumber maybenameerrors
-    return ()) >>= print
+insertPackage packagename versionnumber dependencies modulemap maybenameerrors = do
+    putStrLn ("Inserting: " ++ packagename ++ " " ++ display versionnumber)
+    defaultRunNeoT (do
+        insertDependencies packagename versionnumber dependencies
+        let (moduleerrormap,declarationsmap) = splitModuleMap modulemap
+        traverseWithKey (\modulename declarations -> insertDeclarations packagename versionnumber modulename declarations) declarationsmap
+        traverseWithKey (\modulename moduleerror -> insertModuleError packagename versionnumber modulename moduleerror) moduleerrormap
+        insertNameErrors packagename versionnumber maybenameerrors
+        return ()) >>= print
 
 insertPackageError :: PackageName -> VersionNumber -> PackageError -> IO ()
-insertPackageError packagename versionnumber packageerror = return ()
+insertPackageError packagename versionnumber packageerror = do
+    defaultRunNeoT (
+        cypher
+            "MERGE (rootnode:ROOTNODE)\
+            \CREATE UNIQUE (rootnode)-[:PACKAGE]->(package:Package {packagename : {packagename}})\
+            \CREATE UNIQUE (package)-[:VERSION]->(version:Version {versionnumber : {versionnumber}})\
+            \CREATE UNIQUE (version)-[:PACKAGEERROR]->(packageerror:PackageError {packageerror : {packageerrorstring}})"
+            (object [
+                "packagename" .= packagename,
+                "versionnumber" .= display versionnumber,
+                "packageerrorstring" .= show packageerror]))
+    return ()
 
 insertDependencies :: (Monad m) => PackageName -> VersionNumber -> [Dependency] -> NeoT m ()
 insertDependencies packagename versionnumber dependencies = do
@@ -69,8 +82,8 @@ insertDependencies packagename versionnumber dependencies = do
         "MERGE (rootnode:ROOTNODE)\
         \CREATE UNIQUE (rootnode)-[:PACKAGE]->(package:Package {packagename : {packagename}})\
         \CREATE UNIQUE (package)-[:VERSION]->(version:Version {versionnumber : {versionnumber}})\
-        \FOREACH (dependencyname IN dependencynames |\
-        \    CREATE UNIQUE (rootnode)-[:PACKAGE]->(otherpackage:Package {packagename : {dependencyname}})\
+        \FOREACH (dependencyname IN {dependencynames} |\
+        \    CREATE UNIQUE (rootnode)-[:PACKAGE]->(otherpackage:Package {packagename : dependencyname})\
         \    CREATE UNIQUE (version)-[:DEPENDENCY]->(otherpackage))"
         (object [
             "packagename" .= packagename,
@@ -91,12 +104,12 @@ insertModuleError packagename versionnumber modulename moduleerror = do
         \CREATE UNIQUE (rootnode)-[:PACKAGE]->(package:Package {packagename : {packagename}})\
         \CREATE UNIQUE (package)-[:VERSION]->(version:Version {versionnumber : {versionnumber}})\
         \CREATE UNIQUE (version)-[:MODULE]->(module:Module {modulenname : {modulename}})\
-        \CREATE UNIQUE (module)-[:MODULEERROR]->(moduleerror:ModuleError {moduleerror : {moduleerror}})"
+        \CREATE UNIQUE (module)-[:MODULEERROR]->(moduleerror:ModuleError {moduleerror : {moduleerrorstring}})"
         (object [
             "packagename" .= packagename,
             "versionnumber" .= display versionnumber,
             "modulename" .= display modulename,
-            "moduleerror" .= show moduleerror])
+            "moduleerrorstring" .= show moduleerror])
     return ()
 
 insertNameErrors :: (Monad m) => PackageName -> VersionNumber -> Maybe NameErrors -> NeoT m ()
@@ -105,8 +118,8 @@ insertNameErrors packagename versionnumber (Just (NameErrors nameerrors)) = do
         "MERGE (rootnode:ROOTNODE)\
         \CREATE UNIQUE (rootnode)-[:PACKAGE]->(package:Package {packagename : {packagename}})\
         \CREATE UNIQUE (package)-[:VERSION]->(version:Version {versionnumber : {versionnumber}})\
-        \FOREACH (nameerror IN nameerrors |\
-        \    CREATE UNIQUE (version)-[:NAMEERROR]->(nameerror:NameError {nameerror : {nameerror}}))"
+        \FOREACH (nameerrorstring IN {nameerrors} |\
+        \    CREATE UNIQUE (version)-[:NAMEERROR]->(nameerror:NameError {nameerror : nameerrorstring}))"
         (object [
             "packagename" .= packagename,
             "versionnumber" .= display versionnumber,
