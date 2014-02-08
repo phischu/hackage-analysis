@@ -6,7 +6,7 @@ import Common (
     PackageName,VersionNumber,
     PackageInformation(PackageError,PackageInformation),PackageError,loadPackage,
     ModuleInformation(ModuleError,ModuleInformation),ModuleError(..),loadModuleInformation,
-    loadDeclarations,Declaration,NameErrors(NameErrors),loadNameErrors)
+    loadDeclarations,Declaration(Declaration),NameErrors(NameErrors),loadNameErrors)
 
 import Web.Neo (NeoT,defaultRunNeoT,cypher)
 
@@ -14,7 +14,7 @@ import Distribution.ModuleName (ModuleName)
 import Distribution.Package (Dependency(Dependency))
 import Distribution.Text (display)
 
-import Data.Aeson (object,(.=))
+import Data.Aeson (Value,object,(.=))
 
 import Data.Map (Map,traverseWithKey,mapEither)
 import qualified Data.Map as Map (fromList)
@@ -95,7 +95,27 @@ splitModuleMap :: Map ModuleName (Either ModuleError [Declaration]) -> (Map Modu
 splitModuleMap = mapEither id
 
 insertDeclarations :: (Monad m) => PackageName -> VersionNumber -> ModuleName -> [Declaration] -> NeoT m ()
-insertDeclarations packagename versionnumber modulename declarations = return ()
+insertDeclarations packagename versionnumber modulename declarations = do
+    cypher
+        "MERGE (rootnode:ROOTNODE)\
+        \CREATE UNIQUE (rootnode)-[:PACKAGE]->(package:Package {packagename : {packagename}})\
+        \CREATE UNIQUE (package)-[:VERSION]->(version:Version {versionnumber : {versionnumber}})\
+        \CREATE UNIQUE (version)-[:MODULE]->(module:Module {modulenname : {modulename}})\
+        \FOREACH (declarationdata IN {declarations} |\
+        \    CREATE UNIQUE (module)-[:DECLARATION]->(declaration:Declaration {\
+        \        genre : {declarationdata}.genre,\
+        \        declarationast : {declarationdata}.declarationast}))"
+        (object [
+            "packagename" .= packagename,
+            "versionnumber" .= display versionnumber,
+            "modulename" .= display modulename,
+            "declarations" .= map declarationData declarations])
+    return ()
+
+declarationData :: Declaration -> Value
+declarationData (Declaration genre declarationast _ _) = object [
+    "genre" .= show genre,
+    "declarationast" .= declarationast]
 
 insertModuleError :: (Monad m) => PackageName -> VersionNumber -> ModuleName -> ModuleError -> NeoT m ()
 insertModuleError packagename versionnumber modulename moduleerror = do
