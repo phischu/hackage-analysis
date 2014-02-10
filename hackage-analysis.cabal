@@ -36,6 +36,7 @@ executable hackage-analysis
                        haskell-packages,
                        aeson,
                        bytestring,
+                       text,
                        Cabal,
                        errors,
                        haskell-neo
