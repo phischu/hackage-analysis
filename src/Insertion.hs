@@ -8,8 +8,6 @@ import Common (
     ModuleInformation(ModuleError,ModuleInformation),ModuleError(..),loadModuleInformation,
     loadDeclarations,Declaration(Declaration),NameErrors(NameErrors),loadNameErrors)
 
-import Web.Neo (NeoT,defaultRunNeoT,cypher)
-
 import Language.Haskell.Names (
     Symbols(Symbols),SymValueInfo(..),SymTypeInfo(..),OrigName(OrigName),GName(GName))
 
@@ -17,14 +15,20 @@ import Distribution.ModuleName (ModuleName)
 import Distribution.Package (Dependency(Dependency))
 import Distribution.Text (display)
 
-import Data.Aeson (Value,object,(.=),toJSON)
-import Data.Aeson.Types (Pair)
-import Data.Text (Text)
+import Network.HTTP.Client (
+    withManager,defaultManagerSettings,withResponse,
+    parseUrl,Request(..),RequestBody(RequestBodyLBS),
+    responseStatus,responseBody,brConsume)
 
-import Data.Map (Map,traverseWithKey,mapEither)
+import Data.Aeson (Value,object,(.=),toJSON,encode)
+import Data.Text (Text)
+import qualified  Data.ByteString as ByteString (concat)
+
+import Data.Map (Map,mapWithKey,mapEither)
 import qualified Data.Map as Map (fromList)
 import qualified Data.Set as Set (toList)
 
+import Data.Foldable (fold)
 import Control.Monad (void,forM,forM_)
 
 insertAllPackages :: ParsedRepository -> IO ()
@@ -51,6 +55,29 @@ loadModuleDeclarations packagepath modulenames = forM modulenames (\modulename -
                 Nothing -> return (modulename,Left DeclarationsFileError)
                 Just declarations -> return (modulename,Right declarations))
 
+batchInsert :: [Value] -> IO ()
+batchInsert apicalls = do
+    requestUrl <- parseUrl "http://localhost:7474"
+    let request = requestUrl {
+            method = "POST",
+            requestHeaders = [
+                ("accept","application/json; charset=UTF-8"),
+                ("content-type","application/json")],
+            requestBody = RequestBodyLBS (encode apicalls)}
+    withManager defaultManagerSettings (\manager ->
+        withResponse request manager (\response -> do
+            print (responseStatus response)
+            responseBodyChunks <- brConsume (responseBody response)
+            print (ByteString.concat responseBodyChunks)))
+
+cypher :: Text -> Value -> Value
+cypher querytext parameters = object [
+    "to" .= ("/cypher" :: Text),
+    "method" .= ("POST" :: Text),
+    "body" .= object [
+        "query" .= querytext,
+        "params" .= parameters]]
+
 insertPackage ::
     PackageName ->
     VersionNumber ->
@@ -60,17 +87,17 @@ insertPackage ::
     IO ()
 insertPackage packagename versionnumber dependencies modulemap maybenameerrors = do
     putStrLn ("Inserting: " ++ packagename ++ " " ++ display versionnumber)
-    defaultRunNeoT (do
-        insertDependencies packagename versionnumber dependencies
-        let (moduleerrormap,declarationsmap) = splitModuleMap modulemap
-        traverseWithKey (\modulename declarations -> insertDeclarations packagename versionnumber modulename declarations) declarationsmap
-        traverseWithKey (\modulename moduleerror -> insertModuleError packagename versionnumber modulename moduleerror) moduleerrormap
-        insertNameErrors packagename versionnumber maybenameerrors
-        return ()) >>= print
+    let (moduleerrormap,declarationsmap) = splitModuleMap modulemap
+    batchInsert (concat [
+        [insertDependencies packagename versionnumber dependencies],
+        fold (mapWithKey (\modulename declarations ->
+            [insertDeclarations packagename versionnumber modulename declarations]) declarationsmap),
+        fold (mapWithKey (\modulename moduleerror ->
+            [insertModuleError packagename versionnumber modulename moduleerror]) moduleerrormap),
+        [insertNameErrors packagename versionnumber maybenameerrors]])
 
 insertPackageError :: PackageName -> VersionNumber -> PackageError -> IO ()
-insertPackageError packagename versionnumber packageerror = do
-    defaultRunNeoT (
+insertPackageError packagename versionnumber packageerror = batchInsert ([
         cypher
             "MERGE (rootnode:ROOTNODE)\
             \CREATE UNIQUE (rootnode)-[:PACKAGE]->(package:Package {packagename : {packagename}})\
@@ -79,12 +106,10 @@ insertPackageError packagename versionnumber packageerror = do
             (object [
                 "packagename" .= packagename,
                 "versionnumber" .= display versionnumber,
-                "packageerrorstring" .= show packageerror]))
-    return ()
+                "packageerrorstring" .= show packageerror])])
 
-insertDependencies :: (Monad m) => PackageName -> VersionNumber -> [Dependency] -> NeoT m ()
-insertDependencies packagename versionnumber dependencies = do
-    cypher
+insertDependencies :: PackageName -> VersionNumber -> [Dependency] -> Value
+insertDependencies packagename versionnumber dependencies = cypher
         "MERGE (rootnode:ROOTNODE)\
         \CREATE UNIQUE (rootnode)-[:PACKAGE]->(package:Package {packagename : {packagename}})\
         \CREATE UNIQUE (package)-[:VERSION]->(version:Version {versionnumber : {versionnumber}})\
@@ -95,14 +120,12 @@ insertDependencies packagename versionnumber dependencies = do
             "packagename" .= packagename,
             "versionnumber" .= display versionnumber,
             "dependencynames" .= map (\(Dependency dependencyname _) -> dependencyname) dependencies])
-    return ()
 
 splitModuleMap :: Map ModuleName (Either ModuleError [Declaration]) -> (Map ModuleName ModuleError,Map ModuleName [Declaration])
 splitModuleMap = mapEither id
 
-insertDeclarations :: (Monad m) => PackageName -> VersionNumber -> ModuleName -> [Declaration] -> NeoT m ()
-insertDeclarations packagename versionnumber modulename declarations = do
-    cypher
+insertDeclarations :: PackageName -> VersionNumber -> ModuleName -> [Declaration] -> Value
+insertDeclarations packagename versionnumber modulename declarations = cypher
         "MERGE (rootnode:ROOTNODE)\
         \CREATE UNIQUE (rootnode)-[:PACKAGE]->(package:Package {packagename : {packagename}})\
         \CREATE UNIQUE (package)-[:VERSION]->(version:Version {versionnumber : {versionnumber}})\
@@ -128,7 +151,6 @@ insertDeclarations packagename versionnumber modulename declarations = do
             "versionnumber" .= display versionnumber,
             "modulename" .= display modulename,
             "declarations" .= map declarationData declarations])
-    return ()
 
 declarationData :: Declaration -> Value
 declarationData (Declaration genre declarationast declaredsymbols usedsymbols) = object [
@@ -174,9 +196,8 @@ symTypeGenre (SymTypeFam _ _) = "TypeFamily"
 symTypeGenre (SymDataFam _ _) = "DataFamily"
 symTypeGenre (SymClass _ _) = "Class"
 
-insertModuleError :: (Monad m) => PackageName -> VersionNumber -> ModuleName -> ModuleError -> NeoT m ()
-insertModuleError packagename versionnumber modulename moduleerror = do
-    cypher
+insertModuleError :: PackageName -> VersionNumber -> ModuleName -> ModuleError -> Value
+insertModuleError packagename versionnumber modulename moduleerror = cypher
         "MERGE (rootnode:ROOTNODE)\
         \CREATE UNIQUE (rootnode)-[:PACKAGE]->(package:Package {packagename : {packagename}})\
         \CREATE UNIQUE (package)-[:VERSION]->(version:Version {versionnumber : {versionnumber}})\
@@ -187,11 +208,9 @@ insertModuleError packagename versionnumber modulename moduleerror = do
             "versionnumber" .= display versionnumber,
             "modulename" .= display modulename,
             "moduleerrorstring" .= show moduleerror])
-    return ()
 
-insertNameErrors :: (Monad m) => PackageName -> VersionNumber -> Maybe NameErrors -> NeoT m ()
-insertNameErrors packagename versionnumber (Just (NameErrors nameerrors)) = do
-    cypher
+insertNameErrors :: PackageName -> VersionNumber -> Maybe NameErrors -> Value
+insertNameErrors packagename versionnumber maybenameerrors = cypher
         "MERGE (rootnode:ROOTNODE)\
         \CREATE UNIQUE (rootnode)-[:PACKAGE]->(package:Package {packagename : {packagename}})\
         \CREATE UNIQUE (package)-[:VERSION]->(version:Version {versionnumber : {versionnumber}})\
@@ -201,6 +220,8 @@ insertNameErrors packagename versionnumber (Just (NameErrors nameerrors)) = do
             "packagename" .= packagename,
             "versionnumber" .= display versionnumber,
             "nameerrors" .= nameerrors])
-    return ()
-insertNameErrors _ _ _ = return ()
+        where
+            nameerrors = case maybenameerrors of
+                Just (NameErrors nameerrors) -> nameerrors
+                Nothing -> []
 
