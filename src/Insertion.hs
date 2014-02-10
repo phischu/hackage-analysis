@@ -16,9 +16,10 @@ import Distribution.Package (Dependency(Dependency))
 import Distribution.Text (display)
 
 import Network.HTTP.Client (
-    withManager,defaultManagerSettings,withResponse,
+    withManager,ManagerSettings(..),defaultManagerSettings,withResponse,
     parseUrl,Request(..),RequestBody(RequestBodyLBS),
     responseStatus,responseBody,brConsume)
+import Network.HTTP.Types (statusIsSuccessful)
 
 import Data.Aeson (Value,object,(.=),toJSON,encode)
 import Data.Text (Text)
@@ -29,7 +30,7 @@ import qualified Data.Map as Map (fromList)
 import qualified Data.Set as Set (toList)
 
 import Data.Foldable (fold)
-import Control.Monad (void,forM,forM_)
+import Control.Monad (void,forM,forM_,when)
 
 insertAllPackages :: ParsedRepository -> IO ()
 insertAllPackages =
@@ -57,18 +58,20 @@ loadModuleDeclarations packagepath modulenames = forM modulenames (\modulename -
 
 batchInsert :: [Value] -> IO ()
 batchInsert apicalls = do
-    requestUrl <- parseUrl "http://localhost:7474"
+    requestUrl <- parseUrl "http://localhost:7474/db/data/batch"
     let request = requestUrl {
             method = "POST",
             requestHeaders = [
                 ("accept","application/json; charset=UTF-8"),
                 ("content-type","application/json")],
-            requestBody = RequestBodyLBS (encode apicalls)}
+            requestBody = RequestBodyLBS (encode apicalls),
+            responseTimeout = Nothing}
     withManager defaultManagerSettings (\manager ->
         withResponse request manager (\response -> do
             print (responseStatus response)
             responseBodyChunks <- brConsume (responseBody response)
-            print (ByteString.concat responseBodyChunks)))
+            when (not (statusIsSuccessful (responseStatus response))) (
+                print (ByteString.concat responseBodyChunks))))
 
 cypher :: Text -> Value -> Value
 cypher querytext parameters = object [
