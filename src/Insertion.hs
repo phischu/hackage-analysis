@@ -13,6 +13,8 @@ import Language.Haskell.Names (
 
 import Distribution.ModuleName (ModuleName)
 import Distribution.Package (Dependency(Dependency))
+import Distribution.Version (withinRange)
+import qualified Distribution.Package as Cabal (PackageName(PackageName))
 import Distribution.Text (display)
 
 import Network.HTTP.Client (
@@ -26,7 +28,7 @@ import Data.Text (Text)
 import qualified  Data.ByteString as ByteString (concat)
 
 import Data.Map (Map,mapWithKey,mapEither)
-import qualified Data.Map as Map (fromList,toList)
+import qualified Data.Map as Map (fromList,toList,lookup,keys)
 import qualified Data.Set as Set (toList)
 
 import Data.Foldable (fold)
@@ -43,7 +45,8 @@ insertAllPackages parsedrepository = do
             Just (PackageInformation modulenames dependencies) -> do
                 modulemap <- loadModuleDeclarations packagepath modulenames >>= return . Map.fromList
                 maybenameerrors <- loadNameErrors packagepath
-                insertPackage packagename versionnumber dependencies modulemap maybenameerrors)
+                let actualdependencies = concatMap (lookupActualDependencies parsedrepository) dependencies
+                insertPackage packagename versionnumber actualdependencies modulemap maybenameerrors)
     return ()
 
 loadModuleDeclarations :: PackagePath -> [ModuleName] -> IO [(ModuleName,Either ModuleError [Declaration])]
@@ -90,7 +93,7 @@ cypher querytext parameters = object [
 insertPackage ::
     PackageName ->
     VersionNumber ->
-    [Dependency] ->
+    [ActualDependency] ->
     Map ModuleName (Either ModuleError [Declaration]) ->
     Maybe NameErrors ->
     IO ()
@@ -100,11 +103,12 @@ insertPackage packagename versionnumber dependencies modulemap maybenameerrors =
     batchInsert ([cypher
         "MERGE (rootnode:ROOTNODE)\
         \MERGE (rootnode)-[:PACKAGE]->(package:Package {packagename : {packagename}})\
-        \CREATE (package)-[:VERSION]->(version:Version {versionnumber : {versionnumber}})\
+        \MERGE (package)-[:VERSION]->(version:Version {versionnumber : {versionnumber}})\
         \ \
-        \FOREACH (dependencyname IN {dependencynames} |\
-        \    MERGE (rootnode)-[:PACKAGE]->(otherpackage:Package {packagename : dependencyname})\
-        \    CREATE (version)-[:DEPENDENCY]->(otherpackage))\
+        \FOREACH (dependency IN {dependencies} |\
+        \    MERGE (rootnode)-[:PACKAGE]->(otherpackage:Package {packagename : dependency.dependencyname})\
+        \    MERGE (otherpackage)-[:VERSION]->(otherversion:Version {versionnumber : dependency.dependencyversion})\
+        \    CREATE (version)-[:DEPENDENCY]->(otherversion))\
         \ \
         \FOREACH (moduleerrordata IN {moduleerrormap} |\  
         \    CREATE (version)-[:MODULE]->(module:Module {modulenname : moduleerrordata.modulename})\
@@ -135,7 +139,9 @@ insertPackage packagename versionnumber dependencies modulemap maybenameerrors =
         (object [
             "packagename" .= packagename,
             "versionnumber" .= display versionnumber,
-            "dependencynames" .= map (\(Dependency dependencyname _) -> dependencyname) dependencies,
+            "dependencies" .= [object [
+                "dependencyname" .= dependencyname,
+                "dependencyversion" .= display dependencyversion] | (dependencyname,dependencyversion) <- dependencies],
             "moduleerrormap" .= [object [
                 "modulename" .= display modulename,
                 "moduleerrorstring" .= show moduleerrorstring] | (modulename,moduleerrorstring) <- Map.toList moduleerrormap],
@@ -208,3 +214,11 @@ symTypeGenre (SymTypeFam _ _) = "TypeFamily"
 symTypeGenre (SymDataFam _ _) = "DataFamily"
 symTypeGenre (SymClass _ _) = "Class"
 
+type ActualDependency = (PackageName,VersionNumber)
+
+lookupActualDependencies :: ParsedRepository -> Dependency -> [ActualDependency]
+lookupActualDependencies parsedrepository (Dependency (Cabal.PackageName packagename) versionrange) =
+    case Map.lookup packagename parsedrepository of
+        Nothing -> []
+        Just versionmap -> [(packagename,versionnumber) |
+            versionnumber <- Map.keys versionmap,withinRange versionnumber versionrange]
