@@ -111,14 +111,14 @@ insertPackage packagename versionnumber dependencies modulemap maybenameerrors =
         \    CREATE (version)-[:DEPENDENCY]->(otherversion))\
         \ \
         \FOREACH (moduleerrordata IN {moduleerrormap} |\  
-        \    CREATE (version)-[:MODULE]->(module:Module {modulenname : moduleerrordata.modulename})\
+        \    CREATE (version)-[:MODULE]->(module:Module {modulename : moduleerrordata.modulename})\
         \    CREATE (module)-[:MODULEERROR]->(moduleerror:ModuleError {moduleerror : moduleerrordata.moduleerrorstring}))\
         \ \
         \FOREACH (nameerrorstring IN {nameerrors} |\
         \    CREATE (version)-[:NAMEERROR]->(nameerror:NameError {nameerror : nameerrorstring}))\
         \ \
         \FOREACH (moduledata IN {modulemap} |\
-        \    CREATE (version)-[:MODULE]->(module:Module {modulenname : moduledata.modulename})\
+        \    CREATE (version)-[:MODULE]->(module:Module {modulename : moduledata.modulename})\
         \ \
         \    FOREACH (declarationdata IN moduledata.declarations |\
         \        CREATE (module)-[:DECLARATION]->(declaration:Declaration {\

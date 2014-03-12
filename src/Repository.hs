@@ -16,7 +16,7 @@ import qualified Data.Map as Map (
     map,keys,filterWithKey,toList,fromList,union)
 
 packagesDigest :: [PackageName]
-packagesDigest = smallPackageSelection
+packagesDigest = packagesThatMightBeInThePlatform
 
 smallPackageSelection :: [PackageName]
 smallPackageSelection = ["base","ghc-prim","integer","rts","integer-simple"]
