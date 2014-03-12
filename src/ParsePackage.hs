@@ -28,6 +28,7 @@ import Language.Haskell.Exts.Annotated (parseFileContentsWithMode)
 import Language.Haskell.Exts.Annotated.Fixity (baseFixities)
 import Language.Haskell.Exts.Parser (
     ParseMode(..),defaultParseMode,ParseResult(ParseOk,ParseFailed))
+import Language.Haskell.Exts.Extension (Extension(EnableExtension))
 
 import Control.Exception (evaluate)
 import Control.DeepSeq (force)
@@ -109,7 +110,11 @@ parsePackage packagename packagepath = runEitherT (do
                 evaluate (force sourcecode))
                     `onFailure` PreprocessorError
 
-            let mode = defaultParseMode {parseFilename = modulepath, fixities = Just baseFixities}
+            let mode = defaultParseMode {
+                    parseFilename = modulepath,
+                    extensions = [EnableExtension x | x <- [minBound..maxBound]],
+                    ignoreLanguagePragmas = True,
+                    fixities = Just baseFixities}
 
             eitherast <- scriptIO (do
                 parseresult <- return (parseFileContentsWithMode mode modulefile)

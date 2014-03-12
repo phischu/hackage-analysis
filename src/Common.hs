@@ -7,9 +7,12 @@ import Distribution.ModuleName (ModuleName)
 import Distribution.Text (display,simpleParse)
 
 import qualified Language.Haskell.Exts.Annotated as HSE (Module,SrcSpanInfo)
-import Language.Haskell.Exts.Annotated (parseModuleWithMode,ParseResult(ParseOk,ParseFailed))
+import Language.Haskell.Exts.Annotated (
+    parseModuleWithMode,ParseResult(ParseOk,ParseFailed))
 import Language.Haskell.Exts.Annotated.Fixity (baseFixities)
-import Language.Haskell.Exts.Parser (ParseMode(fixities),defaultParseMode)
+import Language.Haskell.Exts.Extension (Extension(EnableExtension))
+import Language.Haskell.Exts.Parser (
+    ParseMode(extensions,ignoreLanguagePragmas,fixities),defaultParseMode)
 import Language.Haskell.Exts.Pretty (prettyPrint)
 
 import Language.Haskell.Names (Symbols,Error)
@@ -55,6 +58,7 @@ data ModuleError =
     PreprocessorError String |
     ParserError String |
     ModuleInformationFileError |
+    ModuleInformationFileParseError String |
     DeclarationsFileError deriving (Eq,Show,Read)
 
 data PackageInformation =
@@ -105,10 +109,13 @@ parseModuleError _ = mzero
 parseModuleInformation :: Value -> Parser ModuleInformation
 parseModuleInformation (Object o) = do
     moduleastvalue <- o .: "moduleast"
-    let mode = defaultParseMode {fixities = Just baseFixities}
+    let mode = defaultParseMode {
+            extensions = [EnableExtension x | x <- [minBound..maxBound]],
+            ignoreLanguagePragmas = True,
+            fixities = Just baseFixities}
     case parseModuleWithMode mode moduleastvalue of
         ParseOk moduleast -> return (ModuleInformation moduleast)
-        ParseFailed _ _ -> mzero
+        ParseFailed _ err -> return (ModuleError (ModuleInformationFileParseError err))
 parseModuleInformation _ = mzero
 
 type PackagePath = FilePath
