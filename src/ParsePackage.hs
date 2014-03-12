@@ -22,7 +22,7 @@ import Distribution.Text (display)
 import Language.Preprocessor.Cpphs (
     runCpphs,
     defaultCpphsOptions,CpphsOptions(boolopts),
-    defaultBoolOptions,BoolOptions(warnings))
+    defaultBoolOptions,BoolOptions(..))
 
 import Language.Haskell.Exts.Annotated (parseFileContentsWithMode)
 import Language.Haskell.Exts.Annotated.Fixity (baseFixities)
@@ -102,7 +102,18 @@ parsePackage packagename packagepath = runEitherT (do
                 _ -> left MultipleModuleFilesFound
 
             let cpphsoptions = defaultCpphsOptions {boolopts = booloptions }
-                booloptions = defaultBoolOptions {warnings = False}
+                booloptions = defaultBoolOptions {
+                    macros = False,
+                    locations = False,
+                    hashline = False,
+                    pragma = False,
+                    stripEol = False,
+                    stripC89 = False,
+                    lang = True,
+                    ansi = False,
+                    layout = True,
+                    literate = False,
+                    warnings = False}
 
             modulefile <- scriptIO (do
                 rawsource <- readFile modulepath
