@@ -147,7 +147,7 @@ insertPackage packagename versionnumber dependencies modulemap maybenameerrors =
                 "moduleerrorstring" .= show moduleerrorstring] | (modulename,moduleerrorstring) <- Map.toList moduleerrormap],
             "nameerrors" .= case maybenameerrors of
                 Just (NameErrors nameerrors) -> nameerrors
-                Nothing -> [],
+                _ -> [],
             "modulemap" .= [object [
                 "modulename" .= display modulename,
                 "declarations" .= map declarationData declarations] | (modulename,declarations) <- Map.toList declarationsmap]])])
