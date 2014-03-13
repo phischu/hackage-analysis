@@ -19,7 +19,8 @@ import Distribution.ModuleName (ModuleName)
 import Distribution.Version (withinRange)
 
 import qualified Data.ByteString.Lazy as ByteString (writeFile)
-import System.Directory (doesFileExist)
+import System.Directory (doesFileExist,createDirectoryIfMissing)
+import System.FilePath (dropFileName)
 
 import Data.Aeson (encode,ToJSON(toJSON),object,(.=))
 
@@ -86,7 +87,10 @@ instance MonadModule NameResolutionMonad where
             Just modulefilepath -> lift (readInterface modulefilepath >>= return . Just))
     insertInCache modulename symbols = NameResolutionMonad (do
         (packagepath,_) <- ask
-        lift (writeInterface (modulenamespath packagepath (convertModuleName modulename)) symbols))
+        let modulefilepath = modulenamespath packagepath (convertModuleName modulename)
+        lift (do
+            createDirectoryIfMissing True (dropFileName modulefilepath)
+            writeInterface modulefilepath symbols))
     getPackages   = return []
     readModuleInfo filepaths modulename = error
         ("not implemented readModuleInfo: "++show filepaths++" "++modToString modulename)
