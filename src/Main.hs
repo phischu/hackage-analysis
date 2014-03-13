@@ -14,11 +14,11 @@ import Control.Monad (void)
 
 main :: IO ()
 main = do
-    resetDatabase
     sourcerepository <- loadRepository
     parsedrepository <- parseAndSaveAllPackages sourcerepository
     resolveAndSaveAllPackageNames parsedrepository
     splitAndSaveAllDeclarations parsedrepository
+    resetDatabase
     insertAllPackages parsedrepository
     putStrLn "done"
 
