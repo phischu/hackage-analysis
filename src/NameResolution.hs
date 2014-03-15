@@ -26,13 +26,13 @@ import Data.Aeson (encode,ToJSON(toJSON),object,(.=))
 
 import Control.Monad (when,forM_,filterM)
 import Control.Monad.Trans.Class (lift)
-import Control.Monad.Trans.Reader (ReaderT,runReaderT,ask)
+import Control.Monad.Trans.State (StateT,evalStateT,get,modify)
 
 import Data.Maybe (catMaybes,listToMaybe)
 import Data.Set (Set,empty)
 import qualified Data.Set as Set (map,toList)
 import Data.Map (Map,traverseWithKey)
-import qualified Data.Map as Map (lookup,fromList,toAscList)
+import qualified Data.Map as Map (lookup,fromList,toAscList,insert)
 
 resolveAndSaveAllPackageNames :: ParsedRepository -> IO ()
 resolveAndSaveAllPackageNames parsedrepository = do
@@ -76,21 +76,23 @@ resolveDependencies parsedrepository dependencies =
                 return ())
 
 newtype NameResolutionMonad a = NameResolutionMonad {
-    unNameResolutionMonad :: ReaderT (FilePath,Map ModuleName FilePath) IO a } deriving (Functor,Monad)
+    unNameResolutionMonad :: StateT (FilePath,Map ModuleName FilePath) IO a } deriving (Functor,Monad)
 
 instance MonadModule NameResolutionMonad where
     type ModuleInfo NameResolutionMonad = Symbols
     lookupInCache modulename = NameResolutionMonad (do
-        (_,modulemap) <- ask
+        (_,modulemap) <- get
         case Map.lookup (convertModuleName modulename) modulemap of
             Nothing -> return Nothing
             Just modulefilepath -> lift (readInterface modulefilepath >>= return . Just))
     insertInCache modulename symbols = NameResolutionMonad (do
-        (packagepath,_) <- ask
+        (packagepath,_) <- get
         let modulefilepath = modulenamespath packagepath (convertModuleName modulename)
         lift (do
             createDirectoryIfMissing True (dropFileName modulefilepath)
-            writeInterface modulefilepath symbols))
+            writeInterface modulefilepath symbols)
+        modify (\(packagepath,modulemap) ->
+            (packagepath,Map.insert (convertModuleName modulename) modulefilepath modulemap)))
     getPackages   = return []
     readModuleInfo filepaths modulename = error
         ("not implemented readModuleInfo: "++show filepaths++" "++modToString modulename)
@@ -100,7 +102,7 @@ runNameResolution nameresolution (packagepath,parsedrepository,dependencies) = d
     let dependencypaths = map (findDependency parsedrepository) dependencies
     modules <- mapM findModules (catMaybes dependencypaths)
     let modulemap = Map.fromList (concat modules)
-    runReaderT (unNameResolutionMonad nameresolution) (packagepath,modulemap)
+    evalStateT (unNameResolutionMonad nameresolution) (packagepath,modulemap)
 
 findDependency :: ParsedRepository -> Dependency -> Maybe FilePath
 findDependency parsedrepository (Dependency (PackageName packagename) versionrange) =
