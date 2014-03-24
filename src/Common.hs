@@ -18,6 +18,9 @@ import Language.Haskell.Exts.Pretty (prettyPrint)
 import Language.Haskell.Names (Symbols,Error)
 import Language.Haskell.Names.Interfaces ()
 
+import Data.Graph.Inductive.PatriciaTree (Gr)
+import Data.Text (Text)
+
 import Data.Aeson (
     ToJSON(toJSON),object,(.=),
     decode,FromJSON(parseJSON),Value(Object),(.:))
@@ -31,6 +34,7 @@ import Data.Set (Set)
 import qualified Data.Set as Set (map)
 
 import Control.Monad (mzero,mplus,msum)
+import Control.Applicative (Applicative)
 
 type Repository a = Map PackageName (Map VersionNumber a)
 type SourceRepository = Repository FilePath
@@ -40,7 +44,9 @@ type VersionNumber = Version
 
 type ModuleAST = HSE.Module HSE.SrcSpanInfo
 
-traverseRepository :: (PackageName -> VersionNumber -> a -> IO b) -> Repository a -> IO (Repository b)
+type PackageGraph = Gr (Map Text Text) Text
+
+traverseRepository :: (Applicative m) => (PackageName -> VersionNumber -> a -> m b) -> Repository a -> m (Repository b)
 traverseRepository f =
     traverseWithKey (\packagename ->
         traverseWithKey (\versionnumber a ->
