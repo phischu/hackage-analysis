@@ -22,7 +22,7 @@ import Data.Graph.Inductive (Node)
 import qualified Data.Graph.Inductive as Gr (empty)
 import Data.Graph.Inductive.PatriciaTree (Gr)
 import Data.Map (Map)
-import qualified Data.Map as Map (fromList,lookup,keys,empty,mapEither)
+import qualified Data.Map as Map (fromList,lookup,keys,empty,mapEither,toList)
 import Data.Text (Text)
 
 import Control.Monad (forM)
@@ -62,14 +62,36 @@ insertPackage ::
     StateT GraphState m ()
 insertPackage packagename versionnumber actualdependencies modulemap maybenameerrors = do
     let (moduleerrormap,moduledeclarationmap) = splitModuleMap modulemap
-    maybepackagenode <- lookupPackageIndex packagename
-    packagenode <- maybe (newNode [("packagename",packagename)]) return maybepackagenode
-    insertPackageIndex packagename packagenode
+    packagenode <- findOrCreatePackageNode packagename
     versionnode <- newNode [("versionnumber",display versionnumber)]
+    forM (Map.toList moduledeclarationmap) (\(modulename,declarations) -> do
+        modulenode <- newNode [("modulename",display modulename)]
+        forM declarations (\(Declaration declarationgenre declarationast declaredsymbols usedsymbols) -> do
+            declarationnode <- newNode [("declarationgenre",show declarationgenre),("declarationast",declarationast)]
+            forM declaredsymbols (\declaredsymbol -> do
+                let (symbolgenre,symbolmodule,symbolname) = symbolInformation declaredsymbol
+                symbolnode <- findOrCreateSymbolNode symbolgenre symbolmodule symbolname
+                newEdge "DECLAREDSYMBOL" declarationnode symbolnode)
+            forM usedsymbols (\usedsymbol -> do
+                let (symbolgenre,symbolmodule,symbolname) = symbolInformation usedsymbol
+                symbolnode <- findOrCreateSymbolNode symbolgenre symbolmodule symbolname
+                newEdge "USEDSYMBOL" declarationnode symbolnode)))
     return ()
 
 newNode :: [(Text,String)] -> StateT GraphState m Node
 newNode = undefined
+
+newEdge :: Text -> Node -> Node -> StateT GraphState m Edge
+newEdge = undefined
+
+findOrCreatePackageNode :: PackageName -> StateT GraphState m Node
+findOrCreatePackageNode = undefined
+
+findOrCreateSymbolNode :: Genre -> ModuleName -> SymbolName -> StateT GraphState m Node
+findOrCreateSymbolNode = undefined
+
+symbolInformation :: Symbol -> (Genre,ModuleName,SymbolName)
+symbolInformation = undefined
 
 insertPackageIndex :: String -> Node -> StateT GraphState m ()
 insertPackageIndex = undefined
