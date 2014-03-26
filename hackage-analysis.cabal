@@ -21,7 +21,8 @@ executable hackage-analysis
                        ParsePackage,
                        NameResolution,
                        Fragmentation,
-                       Insertion
+                       Insertion,
+                       PropertyGraph
   build-depends:       base,
                        containers,
                        transformers,
