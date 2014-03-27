@@ -9,6 +9,9 @@ import Common (
     loadDeclarations,Declaration(Declaration),NameErrors(NameErrors),loadNameErrors,
     PackageGraph)
 
+import PropertyGraph (
+    PG,PropertyGraph,runPropertyGraph)
+
 import Language.Haskell.Names (
     Symbols(Symbols),SymValueInfo(..),SymTypeInfo(..),OrigName(OrigName),GName(GName))
 
@@ -30,17 +33,9 @@ import Control.Monad (forM)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.State.Strict (StateT,execStateT)
 
-data GraphState = GraphState {
-    graph :: PackageGraph,
-    current :: Int,
-    packageIndex :: Map Text Node,
-    symbolIndex :: Map (Text,Text,Text) Node}
 
-initialstate :: GraphState
-initialstate = GraphState Gr.empty 0 Map.empty Map.empty
-
-insertAllPackages :: ParsedRepository -> IO PackageGraph
-insertAllPackages parsedrepository = fmap graph (flip execStateT initialstate (flip traverseRepository parsedrepository (
+insertAllPackages :: ParsedRepository -> IO PropertyGraph
+insertAllPackages parsedrepository = runPropertyGraph (flip traverseRepository parsedrepository (
     \packagename versionnumber packagepath -> do
         maybepackageinformation <- liftIO (loadPackage packagepath)
         case maybepackageinformation of
@@ -50,7 +45,7 @@ insertAllPackages parsedrepository = fmap graph (flip execStateT initialstate (f
                 modulemap <- liftIO (loadModuleDeclarations packagepath modulenames >>= return . Map.fromList)
                 maybenameerrors <- liftIO (loadNameErrors packagepath)
                 let actualdependencies = concatMap (lookupActualDependencies parsedrepository) dependencies
-                insertPackage packagename versionnumber actualdependencies modulemap maybenameerrors)))
+                insertPackage packagename versionnumber actualdependencies modulemap maybenameerrors))
 
 insertPackage ::
     (Monad m) =>
@@ -59,47 +54,10 @@ insertPackage ::
     [ActualDependency] ->
     Map ModuleName (Either ModuleError [Declaration]) ->
     Maybe NameErrors ->
-    StateT GraphState m ()
-insertPackage packagename versionnumber actualdependencies modulemap maybenameerrors = do
-    let (moduleerrormap,moduledeclarationmap) = splitModuleMap modulemap
-    packagenode <- findOrCreatePackageNode packagename
-    versionnode <- newNode [("versionnumber",display versionnumber)]
-    forM (Map.toList moduledeclarationmap) (\(modulename,declarations) -> do
-        modulenode <- newNode [("modulename",display modulename)]
-        forM declarations (\(Declaration declarationgenre declarationast declaredsymbols usedsymbols) -> do
-            declarationnode <- newNode [("declarationgenre",show declarationgenre),("declarationast",declarationast)]
-            forM declaredsymbols (\declaredsymbol -> do
-                let (symbolgenre,symbolmodule,symbolname) = symbolInformation declaredsymbol
-                symbolnode <- findOrCreateSymbolNode symbolgenre symbolmodule symbolname
-                newEdge "DECLAREDSYMBOL" declarationnode symbolnode)
-            forM usedsymbols (\usedsymbol -> do
-                let (symbolgenre,symbolmodule,symbolname) = symbolInformation usedsymbol
-                symbolnode <- findOrCreateSymbolNode symbolgenre symbolmodule symbolname
-                newEdge "USEDSYMBOL" declarationnode symbolnode)))
-    return ()
+    PG m ()
+insertPackage packagename versionnumber actualdependencies modulemap maybenameerrors = undefined
 
-newNode :: [(Text,String)] -> StateT GraphState m Node
-newNode = undefined
-
-newEdge :: Text -> Node -> Node -> StateT GraphState m Edge
-newEdge = undefined
-
-findOrCreatePackageNode :: PackageName -> StateT GraphState m Node
-findOrCreatePackageNode = undefined
-
-findOrCreateSymbolNode :: Genre -> ModuleName -> SymbolName -> StateT GraphState m Node
-findOrCreateSymbolNode = undefined
-
-symbolInformation :: Symbol -> (Genre,ModuleName,SymbolName)
-symbolInformation = undefined
-
-insertPackageIndex :: String -> Node -> StateT GraphState m ()
-insertPackageIndex = undefined
-
-lookupPackageIndex :: (Monad m) => String -> StateT GraphState m (Maybe Node)
-lookupPackageIndex = undefined
-
-insertPackageError :: PackageName -> VersionNumber -> PackageError -> StateT GraphState IO ()
+insertPackageError :: (Monad m) => PackageName -> VersionNumber -> PackageError -> PG m ()
 insertPackageError = undefined
 
 loadModuleDeclarations :: PackagePath -> [ModuleName] -> IO [(ModuleName,Either ModuleError [Declaration])]

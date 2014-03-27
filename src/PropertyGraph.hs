@@ -1,9 +1,19 @@
 module PropertyGraph where
 
-type PG m = ListT (StateT Gr m)
+import Data.Graph.Inductive (Node,Edge)
+import Data.Graph.Inductive.PatriciaTree (Gr)
+import Pipes (ListT)
+import Control.Monad.Trans.State.Strict (StateT)
+import Data.Map (Map)
+import Data.Text (Text)
+
+type PG m = ListT (StateT PropertyGraph m)
+type PropertyGraph = Gr Properties Label
 type Properties = Map Text Text
 type Label = Text
 
+runPropertyGraph :: PG m a -> m PropertyGraph
+runPropertyGraph = undefined
 
 newNode :: Properties -> PG m Node
 newNode = undefined
