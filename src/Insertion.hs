@@ -11,7 +11,7 @@ import Common (
 
 import PropertyGraph (
     PG,PropertyGraph,runPropertyGraph,Properties,
-    newNode,
+    newNode,newEdge,
     unique,suc,has,properties,strain)
 
 import Language.Haskell.Names (
@@ -67,30 +67,33 @@ insertPackage ::
 insertPackage packagename versionnumber actualdependencies modulemap maybenameerrors = do
     packagenode <- insertPackageNode packagename
     versionnode <- insertVersionNode packagenode versionnumber
+    forM actualdependencies (\(depdencypackagename,dependencyversionnumber) -> do
+        depedencypackagenode <- insertPackageNode depdencypackagename
+        dependencyversionnode <- insertVersionNode depedencypackagenode dependencyversionnumber
+        newEdge "DEPENDENCY" versionnode dependencyversionnode)
+    let (moduleerrormap,declarationsmap) = splitModuleMap modulemap
     return ()
+
+merge :: (Monad m) => PG m (Maybe a) -> PG m a -> PG m a
+merge pgm pg = pgm >>= maybe pg return
 
 insertPackageNode :: (Monad m) => PackageName -> PG (StateT Indices m) Node
 insertPackageNode packagename = do
     packageindex <- lift (lift (gets packageIndex))
     let packageproperties = Map.fromList [("packagename",pack packagename)]
-    case Map.lookup packageproperties packageindex of
-        Nothing -> do
-            pn <- newNode packageproperties
-            let packageindex' = Map.insert packageproperties pn packageindex
-            lift (lift (modify (\(Indices _ symbolindex) -> Indices packageindex' symbolindex)))
-            return pn
-        Just pn -> return pn
+    merge (return (Map.lookup packageproperties packageindex)) (do
+        pn <- newNode packageproperties
+        let packageindex' = Map.insert packageproperties pn packageindex
+        lift (lift (modify (\(Indices _ symbolindex) -> Indices packageindex' symbolindex)))
+        return pn)
 
 insertVersionNode :: (Monad m) => Node -> VersionNumber -> PG (StateT Indices m) Node
 insertVersionNode packagenode versionnumber = do
     let versionproperties = Map.fromList [("versionnumber",pack (display versionnumber))]
-    maybeversionnode <- unique (
-        return packagenode >>=
-        suc "VERSION" >>=
-        has (
-            properties >=>
-            strain (==versionproperties)))
-    return undefined
+    merge (unique (return packagenode >>= suc "VERSION" >>= has (properties >=> strain (==versionproperties)))) (do
+        versionnode <- newNode versionproperties
+        newEdge "VERSION" packagenode versionnode
+        return versionnode)
 
 insertPackageError :: (Monad m) => PackageName -> VersionNumber -> PackageError -> PG (StateT Indices m) ()
 insertPackageError = undefined
