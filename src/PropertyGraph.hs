@@ -1,12 +1,12 @@
 module PropertyGraph where
 
-import qualified Data.Graph.Inductive as Gr (Node,LEdge,newNodes,insNode,insEdge,out,inn,lab,empty)
+import qualified Data.Graph.Inductive as Gr (Node,LEdge,newNodes,insNode,insEdge,out,inn,lab,empty,lsuc,lpre)
 import Data.Graph.Inductive.PatriciaTree (Gr)
 import Pipes (ListT(Select,enumerate),each,runEffect,(>->))
 import Pipes.Prelude (toListM,drain)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.State.Strict (StateT,execStateT,get,put)
-import Control.Monad (mzero)
+import Control.Monad (mzero,guard)
 import Data.Map.Strict (Map)
 import Data.Text (Text)
 
@@ -39,12 +39,19 @@ out n = do
     scatter (Gr.out graph n)
 
 suc :: (Monad m) => Label -> Node -> PG m Node
-suc = undefined
+suc l n = do
+    graph <- lift get
+    scatter (map fst (filter ((==l) . snd) (Gr.lsuc graph n)))
 
 inn :: (Monad m) => Node -> PG m Edge
 inn n = do
     graph <- lift get
     scatter (Gr.inn graph n)
+
+pre :: (Monad m) => Label -> Node -> PG m Node
+pre l n = do
+    graph <- lift get
+    scatter (map fst (filter ((==l) . snd) (Gr.lpre graph n)))
 
 source :: (Monad m) => Edge -> PG m Node
 source (s,_,_) = return s
@@ -83,8 +90,15 @@ unique pg = do
         [a] -> return (Just a)
         _ -> return Nothing
 
-has :: (Monad m) => (a -> PG m b) -> (a -> PG m a)
-has = undefined
+ensure :: (Monad m) => PG m a -> PG m ()
+ensure p = do
+    as <- gather p
+    guard (not (null as))
+
+has :: (Monad m) => (a -> PG m b) -> a -> PG m a
+has p a = do
+    ensure (p a)
+    return a
 
 
 
