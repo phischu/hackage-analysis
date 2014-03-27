@@ -72,6 +72,13 @@ strain p a
     | p a = return a
     | otherwise = mzero
 
+unique :: (Monad m) => PG m a -> PG m (Maybe a)
+unique pg = do
+    as <- gather pg
+    case as of
+        [] -> return Nothing
+        [a] -> return (Just a)
+        _ -> return Nothing
 
 
 
