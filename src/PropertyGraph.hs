@@ -38,6 +38,9 @@ out n = do
     graph <- lift get
     scatter (Gr.out graph n)
 
+suc :: (Monad m) => Label -> Node -> PG m Node
+suc = undefined
+
 inn :: (Monad m) => Node -> PG m Edge
 inn n = do
     graph <- lift get
@@ -80,7 +83,8 @@ unique pg = do
         [a] -> return (Just a)
         _ -> return Nothing
 
-
+has :: (Monad m) => (a -> PG m b) -> (a -> PG m a)
+has = undefined
 
 
 
