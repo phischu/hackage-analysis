@@ -10,7 +10,7 @@ import Common (
     PackageGraph)
 
 import PropertyGraph (
-    PG,PropertyGraph,runPropertyGraph)
+    PG,PropertyGraph,runPropertyGraph,Properties)
 
 import Language.Haskell.Names (
     Symbols(Symbols),SymValueInfo(..),SymTypeInfo(..),OrigName(OrigName),GName(GName))
@@ -31,11 +31,17 @@ import Data.Text (Text)
 import Control.Monad (forM)
 
 import Control.Monad.IO.Class (liftIO)
-import Control.Monad.Trans.State.Strict (StateT,execStateT)
+import Control.Monad.Trans.State.Strict (StateT,evalStateT)
 
+data Indices = Indices {
+    packageIndex :: Map Properties Node,
+    symbolIndex :: Map Properties Node}
+
+emptyIndices :: Indices
+emptyIndices = undefined
 
 insertAllPackages :: ParsedRepository -> IO PropertyGraph
-insertAllPackages parsedrepository = runPropertyGraph (flip traverseRepository parsedrepository (
+insertAllPackages parsedrepository = flip evalStateT emptyIndices (runPropertyGraph (flip traverseRepository parsedrepository (
     \packagename versionnumber packagepath -> do
         maybepackageinformation <- liftIO (loadPackage packagepath)
         case maybepackageinformation of
@@ -45,7 +51,7 @@ insertAllPackages parsedrepository = runPropertyGraph (flip traverseRepository p
                 modulemap <- liftIO (loadModuleDeclarations packagepath modulenames >>= return . Map.fromList)
                 maybenameerrors <- liftIO (loadNameErrors packagepath)
                 let actualdependencies = concatMap (lookupActualDependencies parsedrepository) dependencies
-                insertPackage packagename versionnumber actualdependencies modulemap maybenameerrors))
+                insertPackage packagename versionnumber actualdependencies modulemap maybenameerrors)))
 
 insertPackage ::
     (Monad m) =>
@@ -54,10 +60,10 @@ insertPackage ::
     [ActualDependency] ->
     Map ModuleName (Either ModuleError [Declaration]) ->
     Maybe NameErrors ->
-    PG m ()
+    PG (StateT Indices m) ()
 insertPackage packagename versionnumber actualdependencies modulemap maybenameerrors = undefined
 
-insertPackageError :: (Monad m) => PackageName -> VersionNumber -> PackageError -> PG m ()
+insertPackageError :: (Monad m) => PackageName -> VersionNumber -> PackageError -> PG (StateT Indices m) ()
 insertPackageError = undefined
 
 loadModuleDeclarations :: PackagePath -> [ModuleName] -> IO [(ModuleName,Either ModuleError [Declaration])]

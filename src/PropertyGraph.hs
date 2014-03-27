@@ -7,7 +7,7 @@ import Pipes.Prelude (toListM,drain)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.State.Strict (StateT,execStateT,get,put)
 import Control.Monad (mzero)
-import Data.Map (Map)
+import Data.Map.Strict (Map)
 import Data.Text (Text)
 
 type PG m = ListT (StateT PropertyGraph m)
@@ -79,8 +79,6 @@ unique pg = do
         [] -> return Nothing
         [a] -> return (Just a)
         _ -> return Nothing
-
-
 
 
 
