@@ -41,7 +41,7 @@ data Indices = Indices {
     symbolIndex :: Map Properties Node}
 
 emptyIndices :: Indices
-emptyIndices = undefined
+emptyIndices = Indices Map.empty Map.empty
 
 insertAllPackages :: ParsedRepository -> IO PropertyGraph
 insertAllPackages parsedrepository = flip evalStateT emptyIndices (runPropertyGraph (flip traverseRepository parsedrepository (
