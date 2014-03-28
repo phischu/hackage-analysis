@@ -6,13 +6,10 @@ import Common (
     PackageName,VersionNumber,
     PackageInformation(PackageError,PackageInformation),PackageError,loadPackage,
     ModuleInformation(ModuleError,ModuleInformation),ModuleError(..),loadModuleInformation,
-    loadDeclarations,Declaration(Declaration),NameErrors(NameErrors),loadNameErrors,
-    PackageGraph)
+    loadDeclarations,Declaration(Declaration),NameErrors(NameErrors),loadNameErrors)
 
 import PropertyGraph (
-    PG,PropertyGraph,runPropertyGraph,Properties,
-    newNode,newEdge,
-    unique,suc,has,properties,strain)
+    PG,PropertyGraph,runPropertyGraph,Node)
 
 import Language.Haskell.Names (
     Symbols(Symbols),SymValueInfo(..),SymTypeInfo(..),OrigName(OrigName),GName(GName))
@@ -23,9 +20,6 @@ import Distribution.Version (withinRange)
 import qualified Distribution.Package as Cabal (PackageName(PackageName))
 import Distribution.Text (display)
 
-import Data.Graph.Inductive (Node)
-import qualified Data.Graph.Inductive as Gr (empty)
-import Data.Graph.Inductive.PatriciaTree (Gr)
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map (fromList,lookup,keys,empty,mapEither,toList,insert)
 import Data.Text (Text,pack)
@@ -36,15 +30,9 @@ import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.State.Strict (StateT,evalStateT,gets,modify)
 
-data Indices = Indices {
-    packageIndex :: Map Properties Node,
-    symbolIndex :: Map Properties Node}
-
-emptyIndices :: Indices
-emptyIndices = Indices Map.empty Map.empty
 
 insertAllPackages :: ParsedRepository -> IO PropertyGraph
-insertAllPackages parsedrepository = flip evalStateT emptyIndices (runPropertyGraph (flip traverseRepository parsedrepository (
+insertAllPackages parsedrepository = runPropertyGraph (flip traverseRepository parsedrepository (
     \packagename versionnumber packagepath -> do
         maybepackageinformation <- liftIO (loadPackage packagepath)
         case maybepackageinformation of
@@ -54,7 +42,7 @@ insertAllPackages parsedrepository = flip evalStateT emptyIndices (runPropertyGr
                 modulemap <- liftIO (loadModuleDeclarations packagepath modulenames >>= return . Map.fromList)
                 maybenameerrors <- liftIO (loadNameErrors packagepath)
                 let actualdependencies = concatMap (lookupActualDependencies parsedrepository) dependencies
-                insertPackage packagename versionnumber actualdependencies modulemap maybenameerrors)))
+                insertPackage packagename versionnumber actualdependencies modulemap maybenameerrors))
 
 insertPackage ::
     (Monad m) =>
@@ -63,39 +51,16 @@ insertPackage ::
     [ActualDependency] ->
     Map ModuleName (Either ModuleError [Declaration]) ->
     Maybe NameErrors ->
-    PG (StateT Indices m) ()
-insertPackage packagename versionnumber actualdependencies modulemap maybenameerrors = do
-    packagenode <- insertPackageNode packagename
-    versionnode <- insertVersionNode packagenode versionnumber
-    forM actualdependencies (\(depdencypackagename,dependencyversionnumber) -> do
-        depedencypackagenode <- insertPackageNode depdencypackagename
-        dependencyversionnode <- insertVersionNode depedencypackagenode dependencyversionnumber
-        newEdge "DEPENDENCY" versionnode dependencyversionnode)
-    let (moduleerrormap,declarationsmap) = splitModuleMap modulemap
-    return ()
+    PG m ()
+insertPackage packagename versionnumber actualdependencies modulemap maybenameerrors = undefined
 
-merge :: (Monad m) => PG m (Maybe a) -> PG m a -> PG m a
-merge pgm pg = pgm >>= maybe pg return
+insertPackageNode :: (Monad m) => PackageName -> PG m Node
+insertPackageNode packagename = undefined
 
-insertPackageNode :: (Monad m) => PackageName -> PG (StateT Indices m) Node
-insertPackageNode packagename = do
-    packageindex <- lift (lift (gets packageIndex))
-    let packageproperties = Map.fromList [("packagename",pack packagename)]
-    merge (return (Map.lookup packageproperties packageindex)) (do
-        pn <- newNode packageproperties
-        let packageindex' = Map.insert packageproperties pn packageindex
-        lift (lift (modify (\(Indices _ symbolindex) -> Indices packageindex' symbolindex)))
-        return pn)
+insertVersionNode :: (Monad m) => Node -> VersionNumber -> PG m Node
+insertVersionNode packagenode versionnumber = undefined
 
-insertVersionNode :: (Monad m) => Node -> VersionNumber -> PG (StateT Indices m) Node
-insertVersionNode packagenode versionnumber = do
-    let versionproperties = Map.fromList [("versionnumber",pack (display versionnumber))]
-    merge (unique (return packagenode >>= suc "VERSION" >>= has (properties >=> strain (==versionproperties)))) (do
-        versionnode <- newNode versionproperties
-        newEdge "VERSION" packagenode versionnode
-        return versionnode)
-
-insertPackageError :: (Monad m) => PackageName -> VersionNumber -> PackageError -> PG (StateT Indices m) ()
+insertPackageError :: (Monad m) => PackageName -> VersionNumber -> PackageError -> PG m ()
 insertPackageError = undefined
 
 loadModuleDeclarations :: PackagePath -> [ModuleName] -> IO [(ModuleName,Either ModuleError [Declaration])]

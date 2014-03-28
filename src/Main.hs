@@ -6,8 +6,6 @@ import NameResolution (resolveAndSaveAllPackageNames)
 import Fragmentation (splitAndSaveAllDeclarations)
 import Insertion (insertAllPackages)
 
-import Data.Graph.Inductive (emap,nmap)
-import Data.Graph.Inductive.Graphviz (graphviz,Orient(Portrait))
 import Data.Map.Strict (Map,toList)
 import Data.Text (Text,unpack)
 import Data.List (intercalate)
@@ -28,7 +26,5 @@ main = do
     resolveAndSaveAllPackageNames parsedrepository
     splitAndSaveAllDeclarations parsedrepository
     propertygraph <- insertAllPackages parsedrepository
-    let propertygraph' = emap ShowLabel (nmap ShowProperties propertygraph)
-    writeFile "graph.gv" (graphviz propertygraph' "Hackage" (8.5,11) (1,1) Portrait)
     putStrLn "done"
 

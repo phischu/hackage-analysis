@@ -18,7 +18,6 @@ import Language.Haskell.Exts.Pretty (prettyPrint)
 import Language.Haskell.Names (Symbols,Error)
 import Language.Haskell.Names.Interfaces ()
 
-import Data.Graph.Inductive.PatriciaTree (Gr)
 import Data.Text (Text)
 
 import Data.Aeson (
@@ -43,8 +42,6 @@ type PackageName   = String
 type VersionNumber = Version
 
 type ModuleAST = HSE.Module HSE.SrcSpanInfo
-
-type PackageGraph = Gr (Map Text Text) Text
 
 traverseRepository :: (Applicative m) => (PackageName -> VersionNumber -> a -> m b) -> Repository a -> m (Repository b)
 traverseRepository f =
