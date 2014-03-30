@@ -56,6 +56,8 @@ insertPackage packagename versionnumber actualdependencies modulemap maybenameer
     packagenode <- insertPackageNode packagename
     versionnode <- insertVersionNode versionnumber packagenode
     forM_ actualdependencies (flip insertDependency versionnode)
+    let (moduleerrormap,declarationsmap) = splitModuleMap modulemap
+    forM_ (Map.toList declarationsmap) (flip insertModuleNode versionnode)
 
 property :: (Monad m) => Text -> Text -> Node -> PG m Node
 property propertyname propertyvalue = next propertyname >=> next propertyvalue
@@ -92,6 +94,22 @@ insertDependency :: (Monad m) => ActualDependency -> Node -> PG m ()
 insertDependency (dependencypackagename,dependencyversionnumber) versionnode = do
     dependencyversionnode <- insertPackageNode dependencypackagename >>= insertVersionNode dependencyversionnumber
     start versionnode >>= newNext "Dependency" >>= newLinkTo dependencyversionnode
+
+insertModuleNode :: (Monad m) => (ModuleName,[Declaration]) -> Node -> PG m ()
+insertModuleNode (modulename,declarations) versionnode = do
+    modulenode <- newModuleNode modulename versionnode
+    forM_ declarations (flip insertDeclaration modulenode)
+
+insertDeclaration :: (Monad m) => Declaration -> Node -> PG m ()
+insertDeclaration (Declaration declarationgenre declarationast declaredsymbols usedsymbols) modulenode = do
+    declarationnode <- start modulenode >>= newNext "Declaration"
+    start declarationnode >>= newProperty "declarationgenre" (pack (show declarationgenre))
+    start declarationnode >>= newProperty "declarationast" (pack declarationast)
+    return ()
+
+newModuleNode :: (Monad m) => ModuleName -> Node -> PG m Node
+newModuleNode modulename versionnode = do
+    start versionnode >>= newNext "Module" >>= has (newProperty "modulename" (pack (display modulename)))
 
 insertPackageError :: (Monad m) => PackageName -> VersionNumber -> PackageError -> PG m ()
 insertPackageError packagename versionnumber packageerror = return ()
