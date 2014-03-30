@@ -7,9 +7,9 @@ import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.State.Strict (StateT,execStateT,get,gets,put)
 import Control.Monad (mzero,guard)
 import Data.HashMap.Strict (HashMap)
-import qualified Data.HashMap.Strict as LabelMap (lookup,empty,singleton,insertWith)
+import qualified Data.HashMap.Strict as LabelMap (lookup,empty,singleton,insertWith,elems)
 import Data.IntMap.Strict (IntMap)
-import qualified Data.IntMap.Strict as NodeMap (lookup,insert,singleton,adjust)
+import qualified Data.IntMap.Strict as NodeMap (lookup,insert,singleton,adjust,toList)
 import Data.Text (Text)
 
 type PG m = ListT (StateT (PropertyGraph,Int) m)
@@ -117,7 +117,17 @@ has p a = do
     ensure (p a)
     return a
 
-
+graphviz :: PropertyGraph -> String
+graphviz propertygraph = unlines (["digraph {"] ++ statements ++ ["}"]) where
+    statements = do
+        (node,(_,label,nextmap)) <- NodeMap.toList propertygraph
+        let nodestatement = show node ++ " [ label = " ++ show label ++ "];"
+            edgestatements = do
+                targets <- LabelMap.elems nextmap
+                target <- targets
+                let edgestatement = show node ++ " -> " ++ show target ++ ";"
+                return edgestatement
+        (nodestatement:edgestatements)
 
 
 
