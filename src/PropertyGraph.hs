@@ -11,18 +11,20 @@ import qualified Data.HashMap.Strict as LabelMap (lookup,empty,singleton,insertW
 import Data.IntMap.Strict (IntMap)
 import qualified Data.IntMap.Strict as NodeMap (lookup,insert,singleton,adjust,toList)
 import Data.Text (Text)
+import Data.Strict.Tuple (Pair((:!:)))
+import qualified Data.Strict.Tuple as Strict (fst,snd)
 
-type PG m = ListT (StateT (PropertyGraph,Int) m)
+type PG m = ListT (StateT (Pair PropertyGraph Int) m)
 type Node = Int
 type Label = Text
-type PropertyGraph = IntMap (HashMap Label [Node],Label,HashMap Label [Node])
-
+type PropertyGraph = IntMap Context
+data Context = Context !(HashMap Label [Node]) !Label !(HashMap Label [Node])
 
 rootmap :: PropertyGraph
-rootmap = NodeMap.singleton rootnode (LabelMap.empty,"ROOT",LabelMap.empty)
+rootmap = NodeMap.singleton rootnode (Context LabelMap.empty "ROOT" LabelMap.empty)
 
 runPropertyGraph :: (Monad m) => PG m a -> m PropertyGraph
-runPropertyGraph pg = execStateT (runEffect (enumerate pg >-> drain)) (rootmap,1) >>= return . fst
+runPropertyGraph pg = execStateT (runEffect (enumerate pg >-> drain)) (rootmap :!: 1) >>= return . Strict.fst
 
 rootnode :: Node
 rootnode = 0
@@ -32,55 +34,59 @@ start = return
 
 next :: (Monad m) => Label -> Node -> PG m Node
 next label node = do
-    graph <- lift (gets fst)
+    graph <- lift (gets Strict.fst)
     case NodeMap.lookup node graph of
         Nothing -> mzero
-        Just (_,_,nextmap) -> case LabelMap.lookup label nextmap of
+        Just (Context _ _ nextmap) -> case LabelMap.lookup label nextmap of
             Nothing -> mzero
             Just nexts -> scatter nexts
 
 prev :: (Monad m) => Label -> Node -> PG m Node
 prev label node = do
-    graph <- lift (gets fst)
+    graph <- lift (gets Strict.fst)
     case NodeMap.lookup node graph of
         Nothing -> mzero
-        Just (prevmap,_,_) -> case LabelMap.lookup label prevmap of
+        Just (Context prevmap _ _) -> case LabelMap.lookup label prevmap of
             Nothing -> mzero
             Just prevs -> scatter prevs
 
 lab :: (Monad m) => Node -> PG m Label
 lab node = do
-    graph <- lift (gets fst)
+    graph <- lift (gets Strict.fst)
     case NodeMap.lookup node graph of
         Nothing -> mzero
-        Just (_,label,_) -> return label
+        Just (Context _ label _) -> return label
 
 newNext :: (Monad m) => Label -> Node -> PG m Node
 newNext newlabel node = do
-    (graph,newnode) <- lift get
+    (graph :!: newnode) <- lift get
     label <- lab node
-    let graph' = NodeMap.adjust (\(prevmap,_,nextmap) -> (prevmap,label,LabelMap.insertWith (++) newlabel [newnode] nextmap)) node graph 
-        graph'' = NodeMap.insert newnode (LabelMap.singleton label [node],newlabel,LabelMap.empty) graph'
-    lift (put (graph'',newnode+1))
+    let graph' = NodeMap.adjust (\(Context prevmap _ nextmap) ->
+            (Context prevmap label (LabelMap.insertWith (++) newlabel [newnode] nextmap))) node graph 
+        graph'' = NodeMap.insert newnode (Context (LabelMap.singleton label [node]) newlabel LabelMap.empty) graph'
+    lift (put (graph'' :!: newnode+1))
     return newnode
 
 newPrev :: (Monad m) => Label -> Node -> PG m Node
 newPrev newlabel node = do
     label <- lab node
-    (graph,newnode) <- lift get
-    let graph' = NodeMap.adjust (\(prevmap,_,nextmap) -> (LabelMap.insertWith (++) newlabel [newnode] prevmap,label,nextmap)) node graph 
-        graph'' = NodeMap.insert newnode (LabelMap.empty,newlabel,LabelMap.singleton label [node]) graph'
-    lift (put (graph'',newnode+1))
+    (graph :!: newnode) <- lift get
+    let graph' = NodeMap.adjust (\(Context prevmap _ nextmap) ->
+            (Context (LabelMap.insertWith (++) newlabel [newnode] prevmap) label nextmap)) node graph 
+        graph'' = NodeMap.insert newnode (Context LabelMap.empty newlabel (LabelMap.singleton label [node])) graph'
+    lift (put (graph'' :!: newnode+1))
     return newnode
 
 newLink :: (Monad m) => Node -> Node -> PG m ()
 newLink node1 node2 = do
     label1 <- lab node1
     label2 <- lab node2
-    (graph,n) <- lift get
-    let graph' = NodeMap.adjust (\(prevmap,_,nextmap) -> (prevmap,label1,LabelMap.insertWith (++) label2 [node2] nextmap)) node1 graph
-        graph'' = NodeMap.adjust (\(prevmap,_,nextmap) -> (LabelMap.insertWith (++) label1 [node1] prevmap,label2,nextmap)) node2 graph'
-    lift (put (graph'',n))
+    (graph :!: n) <- lift get
+    let graph' = NodeMap.adjust (\(Context prevmap _ nextmap) ->
+            (Context prevmap label1 (LabelMap.insertWith (++) label2 [node2] nextmap))) node1 graph
+        graph'' = NodeMap.adjust (\(Context prevmap _ nextmap) -> 
+            (Context (LabelMap.insertWith (++) label1 [node1] prevmap) label2 nextmap)) node2 graph'
+    lift (put (graph'' :!: n))
     return ()
 
 newLinkTo :: (Monad m) => Node -> Node -> PG m ()
@@ -120,7 +126,7 @@ has p a = do
 graphviz :: PropertyGraph -> String
 graphviz propertygraph = unlines (["digraph {"] ++ statements ++ ["}"]) where
     statements = do
-        (node,(_,label,nextmap)) <- NodeMap.toList propertygraph
+        (node,(Context _ label nextmap)) <- NodeMap.toList propertygraph
         let nodestatement = show node ++ " [ label = " ++ show label ++ "];"
             edgestatements = do
                 targets <- LabelMap.elems nextmap
