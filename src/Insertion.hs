@@ -9,7 +9,7 @@ import Common (
     loadDeclarations,Declaration(Declaration),NameErrors(NameErrors),loadNameErrors)
 
 import PropertyGraph (
-    PG,PropertyGraph,runPropertyGraph,Node)
+    PG,PropertyGraph,runPropertyGraph,Node,unique,rootnode,next,newNext,start,has,newLinkTo)
 
 import Language.Haskell.Names (
     Symbols(Symbols),SymValueInfo(..),SymTypeInfo(..),OrigName(OrigName),GName(GName))
@@ -24,7 +24,7 @@ import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map (fromList,lookup,keys,empty,mapEither,toList,insert)
 import Data.Text (Text,pack)
 
-import Control.Monad (forM,(>=>))
+import Control.Monad (forM,forM_,(>=>))
 
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Class (lift)
@@ -52,16 +52,49 @@ insertPackage ::
     Map ModuleName (Either ModuleError [Declaration]) ->
     Maybe NameErrors ->
     PG m ()
-insertPackage packagename versionnumber actualdependencies modulemap maybenameerrors = undefined
+insertPackage packagename versionnumber actualdependencies modulemap maybenameerrors = do
+    packagenode <- insertPackageNode packagename
+    versionnode <- insertVersionNode versionnumber packagenode
+    forM_ actualdependencies (flip insertDependency versionnode)
+
+property :: (Monad m) => Text -> Text -> Node -> PG m Node
+property propertyname propertyvalue = next propertyname >=> next propertyvalue
+
+newProperty :: (Monad m) => Text -> Text -> Node -> PG m Node
+newProperty propertyname propertyvalue = newNext propertyname >=> newNext propertyvalue
 
 insertPackageNode :: (Monad m) => PackageName -> PG m Node
-insertPackageNode packagename = undefined
+insertPackageNode packagename = do
+    unique (getPackageNode packagename) >>= maybe (newPackageNode packagename) return
 
-insertVersionNode :: (Monad m) => Node -> VersionNumber -> PG m Node
-insertVersionNode packagenode versionnumber = undefined
+getPackageNode :: (Monad m) => PackageName -> PG m Node
+getPackageNode packagename = do
+    start rootnode >>= next "Package" >>= has (property "packagename" (pack packagename))
+
+newPackageNode :: (Monad m) => PackageName -> PG m Node
+newPackageNode packagename = do
+    start rootnode >>= newNext "Package" >>= has (newProperty "packagename" (pack packagename))
+
+insertVersionNode :: (Monad m) => VersionNumber -> Node -> PG m Node
+insertVersionNode versionnumber packagenode =
+    unique (getVersionNode versionnumber packagenode) >>=
+        maybe (newVersionNode versionnumber packagenode) return
+
+getVersionNode :: (Monad m) => VersionNumber -> Node -> PG m Node
+getVersionNode versionnumber packagenode = do
+    start packagenode >>= next "Version" >>= has (property "versionnumber" (pack (display versionnumber)))
+
+newVersionNode :: (Monad m) => VersionNumber -> Node -> PG m Node
+newVersionNode versionnumber packagenode = do
+    start packagenode >>= newNext "Version" >>= has (newProperty "versionnumber" (pack (display versionnumber)))
+
+insertDependency :: (Monad m) => ActualDependency -> Node -> PG m ()
+insertDependency (dependencypackagename,dependencyversionnumber) versionnode = do
+    dependencyversionnode <- insertPackageNode dependencypackagename >>= insertVersionNode dependencyversionnumber
+    start versionnode >>= newNext "Dependency" >>= newLinkTo dependencyversionnode
 
 insertPackageError :: (Monad m) => PackageName -> VersionNumber -> PackageError -> PG m ()
-insertPackageError = undefined
+insertPackageError packagename versionnumber packageerror = return ()
 
 loadModuleDeclarations :: PackagePath -> [ModuleName] -> IO [(ModuleName,Either ModuleError [Declaration])]
 loadModuleDeclarations packagepath modulenames = forM modulenames (\modulename -> do
