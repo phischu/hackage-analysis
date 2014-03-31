@@ -16,21 +16,27 @@ import Data.Text (Text)
 import Data.Strict.Tuple (Pair((:!:)))
 import qualified Data.Strict.Tuple as Strict (fst)
 
-type PG m = ListT (StateT (Pair PropertyGraph Int) m)
+type PG m = StateT PropertyGraph m
+data PropertyGraph = PropertyGraph !LabelMap !PrevMap !NextMap !LabelIndex !NewNode
+type LabelMap = IntMap Label
+type PrevMap = IntMap NodeSet
+type NextMap = IntMap NodeSet
+type LabelIndex = HashMap Label NodeSet
+type NewNode = Node
 type Node = Int
 type Label = Text
 type NodeSet = IntSet
-data PropertyGraph = PropertyGraph !LabelMap !PrevMap !NextMap !LabelIndex
-type LabelMap = IntMap Label
-type NextMap = IntMap NodeSet
-type PrevMap = IntMap NodeSet
-type LabelIndex = HashMap Label NodeSet
 
 rootmap :: PropertyGraph
-rootmap = PropertyGraph (IntMap.singleton rootnode "ROOT") IntMap.empty IntMap.empty (HashMap.singleton "ROOT" (IntSet.singleton rootnode))
+rootmap = PropertyGraph
+    (IntMap.singleton rootnode "ROOT")
+    IntMap.empty
+    IntMap.empty
+    (HashMap.singleton "ROOT" (IntSet.singleton rootnode))
+    1
 
 runPropertyGraph :: (Monad m) => PG m a -> m PropertyGraph
-runPropertyGraph pg = execStateT (runEffect (enumerate pg >-> drain)) (rootmap :!: 1) >>= return . Strict.fst
+runPropertyGraph pg = execStateT pg rootmap
 
 rootnode :: Node
 rootnode = 0
@@ -38,74 +44,48 @@ rootnode = 0
 start :: (Monad m) => Node -> PG m Node
 start = return
 
-labeled :: (Monad m) => Label -> PG m NodeSet
-labeled label = do
-    PropertyGraph _ _ _ labelindex <- lift (gets Strict.fst)
-    case HashMap.lookup label labelindex of
-        Nothing -> return IntSet.empty
-        Just nodeset -> return nodeset
+nodesByLabel :: PropertyGraph -> Label -> NodeSet
+nodesByLabel (PropertyGraph _ _ _ labelindex _) label = case HashMap.lookup label labelindex of
+    Nothing -> IntSet.empty
+    Just nodeset -> nodeset
 
-next :: (Monad m) => Node -> PG m NodeSet
-next node = do
-    PropertyGraph _ _ nextmap _ <- lift (gets Strict.fst)
-    case IntMap.lookup node nextmap of
-        Nothing -> return IntSet.empty
-        Just nodeset -> return nodeset
+nextByNode :: PropertyGraph -> Node -> NodeSet
+nextByNode (PropertyGraph _ _ nextmap _ _) node = case IntMap.lookup node nextmap of
+    Nothing -> IntSet.empty
+    Just nodeset -> nodeset
 
-prev :: (Monad m) => Node -> PG m NodeSet
-prev node = do
-    PropertyGraph _ prevmap _ _ <- lift (gets Strict.fst)
-    case IntMap.lookup node prevmap of
-        Nothing -> return IntSet.empty
-        Just nodeset -> return nodeset
+prevByNode :: PropertyGraph -> Node -> NodeSet
+prevByNode (PropertyGraph _ prevmap _ _ _) node = case IntMap.lookup node prevmap of
+    Nothing -> IntSet.empty
+    Just nodeset -> nodeset
 
-lab :: (Monad m) => Node -> PG m Label
-lab node = do
-    PropertyGraph labelmap _ _ _ <- lift (gets Strict.fst)
-    case IntMap.lookup node labelmap of
-        Nothing -> mzero
-        Just label -> return label
+labelByNode :: PropertyGraph -> Node -> Maybe Label
+labelByNode (PropertyGraph labelmap _ _ _ _) node = IntMap.lookup node labelmap
 
 newNode :: (Monad m) => Label -> PG m Node
 newNode newlabel = do
-    (PropertyGraph labelmap prevmap nextmap labelindex :!: newnode) <- lift get
+    PropertyGraph labelmap prevmap nextmap labelindex newnode <- get
     let labelmap' = IntMap.insert newnode newlabel labelmap
         labelindex' = HashMap.insertWith IntSet.union newlabel (IntSet.singleton newnode) labelindex
-    lift (put (PropertyGraph labelmap' prevmap nextmap labelindex' :!: newnode + 1))
-    return newnode
-
-newNext :: (Monad m) => Label -> Node -> PG m Node
-newNext newlabel node = do
-    newnode <- newNode newlabel
-    newEdge node newnode
-    return newnode
-
-newPrev :: (Monad m) => Label -> Node -> PG m Node
-newPrev newlabel node = do
-    newnode <- newNode newlabel
-    newEdge newnode node
+    put (PropertyGraph labelmap' prevmap nextmap labelindex' (newnode + 1))
     return newnode
 
 newEdge :: (Monad m) => Node -> Node -> PG m ()
 newEdge node1 node2 = do
-    (PropertyGraph labelmap prevmap nextmap labelindex :!: n) <- lift get
+    PropertyGraph labelmap prevmap nextmap labelindex newnode <- get
     let prevmap' = IntMap.insertWith IntSet.union node2 (IntSet.singleton node1) prevmap
         nextmap' = IntMap.insertWith IntSet.union node1 (IntSet.singleton node2) nextmap
-    lift (put (PropertyGraph labelmap prevmap' nextmap' labelindex :!: n))
-    return ()
+    put (PropertyGraph labelmap prevmap' nextmap' labelindex newnode)
 
 newEdgeTo :: (Monad m) => Node -> Node -> PG m ()
 newEdgeTo node2 node1 = newEdge node1 node2
 
-nextLabeled :: (Monad m) => Label -> Node -> PG m Node
-nextLabeled label node = do
-    nexts <- next node
-    labeleds <- labeled label
-    scatter (IntSet.toList (IntSet.intersection nexts labeleds))
-
 newNextLabeled :: (Monad m) => Label -> Node -> PG m Node
-newNextLabeled = newNext
-
+newNextLabeled label node = do
+    newnode <- newNode label
+    newEdge node newnode
+    return newnode
+{-
 gather :: (Monad m) => PG m a -> PG m [a]
 gather pg = do
     as <- lift (toListM (enumerate pg))
@@ -136,9 +116,9 @@ has :: (Monad m) => (a -> PG m b) -> a -> PG m a
 has p a = do
     ensure (p a)
     return a
-
+-}
 graphviz :: PropertyGraph -> String
-graphviz (PropertyGraph labelmap _ nextmap _) = unlines (["digraph {"] ++ nodestatements ++ edgestatements ++ ["}"]) where
+graphviz (PropertyGraph labelmap _ nextmap _ _) = unlines (["digraph {"] ++ nodestatements ++ edgestatements ++ ["}"]) where
     nodestatements = do
         (node,label) <- IntMap.toList labelmap
         return (show node ++ " [ label = " ++ show label ++ "];")

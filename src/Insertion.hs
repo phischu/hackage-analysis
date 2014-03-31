@@ -9,7 +9,7 @@ import Common (
     loadDeclarations,Declaration(Declaration),NameErrors(NameErrors),loadNameErrors)
 
 import PropertyGraph (
-    PG,PropertyGraph,Label,runPropertyGraph,Node,unique,rootnode,start,has,newEdgeTo,nextLabeled,newNextLabeled)
+    PG,PropertyGraph,Label,runPropertyGraph,Node,rootnode,start,newEdgeTo,newNextLabeled)
 
 import Language.Haskell.Names (
     Symbols(Symbols),SymValueInfo(..),SymTypeInfo(..),OrigName(OrigName),GName(GName))
@@ -59,36 +59,20 @@ insertPackage packagename versionnumber actualdependencies modulemap maybenameer
     let (moduleerrormap,declarationsmap) = splitModuleMap modulemap
     forM_ (Map.toList declarationsmap) (flip insertModuleNode versionnode)
 
-property :: (Monad m) => Text -> Text -> Node -> PG m Node
-property propertyname propertyvalue = nextLabeled propertyname >=> nextLabeled propertyvalue
-
 newProperty :: (Monad m) => Text -> Text -> Node -> PG m Node
 newProperty propertyname propertyvalue = newNextLabeled propertyname >=> newNextLabeled propertyvalue
 
 insertPackageNode :: (Monad m) => PackageName -> PG m Node
 insertPackageNode packagename = do
-    unique (getPackageNode packagename) >>= maybe (newPackageNode packagename) return
-
-getPackageNode :: (Monad m) => PackageName -> PG m Node
-getPackageNode packagename = do
-    start rootnode >>= nextLabeled "Package" >>= has (property "packagename" (pack packagename))
-
-newPackageNode :: (Monad m) => PackageName -> PG m Node
-newPackageNode packagename = do
-    start rootnode >>= newNextLabeled "Package" >>= has (newProperty "packagename" (pack packagename))
+    packagenode <- start rootnode >>= newNextLabeled "Package"
+    start packagenode >>= newProperty "packagename" (pack packagename)
+    return packagenode
 
 insertVersionNode :: (Monad m) => VersionNumber -> Node -> PG m Node
-insertVersionNode versionnumber packagenode =
-    unique (getVersionNode versionnumber packagenode) >>=
-        maybe (newVersionNode versionnumber packagenode) return
-
-getVersionNode :: (Monad m) => VersionNumber -> Node -> PG m Node
-getVersionNode versionnumber packagenode = do
-    start packagenode >>= nextLabeled "Version" >>= has (property "versionnumber" (pack (display versionnumber)))
-
-newVersionNode :: (Monad m) => VersionNumber -> Node -> PG m Node
-newVersionNode versionnumber packagenode = do
-    start packagenode >>= newNextLabeled "Version" >>= has (newProperty "versionnumber" (pack (display versionnumber)))
+insertVersionNode versionnumber packagenode = do
+    versionnode <- start packagenode >>= newNextLabeled "Version"
+    start versionnode >>= newProperty "versionnumber" (pack (display versionnumber))
+    return versionnode
 
 insertDependency :: (Monad m) => ActualDependency -> Node -> PG m ()
 insertDependency (dependencypackagename,dependencyversionnumber) versionnode = do
@@ -109,7 +93,9 @@ insertDeclaration (Declaration declarationgenre declarationast declaredsymbols u
 
 newModuleNode :: (Monad m) => ModuleName -> Node -> PG m Node
 newModuleNode modulename versionnode = do
-    start versionnode >>= newNextLabeled "Module" >>= has (newProperty "modulename" (pack (display modulename)))
+    modulenode <- start versionnode >>= newNextLabeled "Module"
+    start modulenode >>= newProperty "modulename" (pack (display modulename))
+    return modulenode
 
 insertPackageError :: (Monad m) => PackageName -> VersionNumber -> PackageError -> PG m ()
 insertPackageError packagename versionnumber packageerror = return ()
