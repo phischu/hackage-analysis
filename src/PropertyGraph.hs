@@ -7,11 +7,11 @@ import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.State.Strict (StateT,execStateT,get,gets,put)
 import Control.Monad (mzero,guard)
 import Data.HashMap.Strict (HashMap)
-import qualified Data.HashMap.Strict as HashMap (lookup,empty,singleton,insertWith,elems)
+import qualified Data.HashMap.Strict as HashMap (lookup,empty,singleton,insertWith,elems,insert)
 import Data.IntMap.Strict (IntMap)
 import qualified Data.IntMap.Strict as IntMap (lookup,insert,singleton,adjust,toList,empty,insertWith)
 import Data.IntSet (IntSet)
-import qualified Data.IntSet as IntSet (empty,intersection,union,singleton,toList)
+import qualified Data.IntSet as IntSet (empty,intersection,union,singleton,toList,insert)
 import Data.Text (Text)
 import Data.Strict.Tuple (Pair((:!:)))
 import qualified Data.Strict.Tuple as Strict (fst)
@@ -68,18 +68,24 @@ newNode :: (Monad m) => Label -> PG m Node
 newNode newlabel = do
     PropertyGraph labelmap prevmap nextmap labelindex newnode <- lift get
     let labelmap' = IntMap.insert newnode newlabel labelmap
-        labelindex' = HashMap.insertWith IntSet.union newlabel (IntSet.singleton newnode) labelindex
+        labelindex' = case HashMap.lookup newlabel labelindex of
+            Nothing -> HashMap.insert newlabel (IntSet.singleton newnode) labelindex
+            Just nodeset -> HashMap.insert newlabel (IntSet.insert newnode nodeset) labelindex
         propertygraph' = PropertyGraph labelmap' prevmap nextmap labelindex' (newnode + 1)
-    seq propertygraph' (lift (put propertygraph'))
+    lift (put propertygraph')
     return newnode
 
 newEdge :: (Monad m) => Node -> Node -> PG m ()
 newEdge node1 node2 = do
     PropertyGraph labelmap prevmap nextmap labelindex newnode <- lift get
-    let prevmap' = IntMap.insertWith IntSet.union node2 (IntSet.singleton node1) prevmap
-        nextmap' = IntMap.insertWith IntSet.union node1 (IntSet.singleton node2) nextmap
+    let prevmap' = case IntMap.lookup node2 prevmap of
+            Nothing -> IntMap.insert node2 (IntSet.singleton node1) prevmap
+            Just nodeset -> IntMap.insert node2 (IntSet.insert node1 nodeset) prevmap
+        nextmap' = case IntMap.lookup node1 nextmap of
+            Nothing -> IntMap.insert node1 (IntSet.singleton node2) nextmap
+            Just nodeset -> IntMap.insert node1 (IntSet.insert node2 nodeset) nextmap
         propertygraph' = PropertyGraph labelmap prevmap' nextmap' labelindex newnode
-    seq propertygraph' (lift (put propertygraph'))
+    lift (put propertygraph')
 
 newEdgeTo :: (Monad m) => Node -> Node -> PG m ()
 newEdgeTo node2 node1 = newEdge node1 node2
