@@ -15,6 +15,7 @@ import qualified Data.IntSet as IntSet (empty,intersection,union,singleton,toLis
 import Data.Text (Text)
 import Data.Strict.Tuple (Pair((:!:)))
 import qualified Data.Strict.Tuple as Strict (fst)
+import Control.Monad ((>=>))
 
 type PG m = ListT (StateT PropertyGraph m)
 data PropertyGraph = PropertyGraph !LabelMap !PrevMap !NextMap !LabelIndex !NewNode
@@ -59,10 +60,10 @@ prev node = do
     PropertyGraph _ prevmap _ _ _ <- lift get
     Select (each (maybe [] IntSet.toList (IntMap.lookup node prevmap)))
 
-label :: (Monad m) => Node -> PG m (Maybe Label)
+label :: (Monad m) => Node -> PG m Label
 label node = do
      PropertyGraph labelmap _ _ _ _ <- lift get
-     return (IntMap.lookup node labelmap)
+     maybe mzero return (IntMap.lookup node labelmap)
 
 newNode :: (Monad m) => Label -> PG m Node
 newNode newlabel = do
@@ -89,6 +90,10 @@ newEdge node1 node2 = do
 
 newEdgeTo :: (Monad m) => Node -> Node -> PG m ()
 newEdgeTo node2 node1 = newEdge node1 node2
+
+prevLabeled :: (Monad m) => Label -> Node -> PG m Node
+prevLabeled lab node = do
+    start node >>= prev >>= has (label >=> strain (==lab))
 
 newNextLabeled :: (Monad m) => Label -> Node -> PG m Node
 newNextLabeled label node = do

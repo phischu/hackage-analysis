@@ -9,7 +9,8 @@ import Common (
     loadDeclarations,Declaration(Declaration),NameErrors(NameErrors),loadNameErrors)
 
 import PropertyGraph (
-    PG,PropertyGraph,Label,runPropertyGraph,Node,rootnode,start,newEdgeTo,newNextLabeled)
+    PG,PropertyGraph,Label,runPropertyGraph,Node,rootnode,start,
+    newEdgeTo,newNextLabeled,labeled,prevLabeled,prev,unique,strain,newEdge)
 
 import Language.Haskell.Names (
     Symbols(Symbols),SymValueInfo(..),SymTypeInfo(..),OrigName(OrigName),GName(GName))
@@ -24,7 +25,7 @@ import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map (fromList,lookup,keys,empty,mapEither,toList,insert)
 import Data.Text (Text,pack)
 
-import Control.Monad (forM,forM_,(>=>))
+import Control.Monad (forM,forM_,(>=>),guard)
 
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Class (lift)
@@ -59,19 +60,50 @@ insertPackage packagename versionnumber actualdependencies modulemap maybenameer
     let (moduleerrormap,declarationsmap) = splitModuleMap modulemap
     forM_ (Map.toList declarationsmap) (flip insertModuleNode versionnode)
 
+propertyIndex :: (Monad m) => Text -> Text -> PG m Node
+propertyIndex propertyname propertyvalue = getProperty propertyname propertyvalue >>= prev
+
+insertProperty :: (Monad m) => Text -> Text -> Node -> PG m Node
+insertProperty propertyname propertyvalue node =
+    unique (getProperty propertyname propertyvalue) >>=
+        maybe (newProperty propertyname propertyvalue node) (\propertynode -> newEdge node propertynode >> return node)
+
+getProperty :: (Monad m) => Text -> Text -> PG m Node
+getProperty propertyname propertyvalue = do
+    labeled propertyvalue >>= prevLabeled propertyname
+
 newProperty :: (Monad m) => Text -> Text -> Node -> PG m Node
-newProperty propertyname propertyvalue = newNextLabeled propertyname >=> newNextLabeled propertyvalue
+newProperty propertyname propertyvalue node = do
+    start node >>= newNextLabeled "propertyname" >>= newNextLabeled propertyvalue
+    return node
 
 insertPackageNode :: (Monad m) => PackageName -> PG m Node
-insertPackageNode packagename = do
+insertPackageNode packagename = unique (getPackageNode packagename) >>= maybe (newPackageNode packagename) return
+
+getPackageNode :: (Monad m) => PackageName -> PG m Node
+getPackageNode packagename = propertyIndex "packagename" (pack packagename)
+
+newPackageNode :: (Monad m) => PackageName -> PG m Node
+newPackageNode packagename = do
     packagenode <- start rootnode >>= newNextLabeled "Package"
-    start packagenode >>= newProperty "packagename" (pack packagename)
+    start packagenode >>= insertProperty "packagename" (pack packagename)
     return packagenode
 
 insertVersionNode :: (Monad m) => VersionNumber -> Node -> PG m Node
-insertVersionNode versionnumber packagenode = do
+insertVersionNode versionnumber packagenode =
+    unique (getVersionNode versionnumber packagenode) >>= maybe (newVersionNode versionnumber packagenode) return
+
+getVersionNode :: (Monad m) => VersionNumber -> Node -> PG m Node
+getVersionNode versionnumber packagenode = do
+    versionnode <- propertyIndex "versionnumber" (pack (display versionnumber))
+    packagenode' <- start versionnode >>= prevLabeled "Package"
+    guard (packagenode == packagenode')
+    return versionnode
+
+newVersionNode :: (Monad m) => VersionNumber -> Node -> PG m Node
+newVersionNode versionnumber packagenode = do
     versionnode <- start packagenode >>= newNextLabeled "Version"
-    start versionnode >>= newProperty "versionnumber" (pack (display versionnumber))
+    start versionnode >>= insertProperty "versionnumber" (pack (display versionnumber))
     return versionnode
 
 insertDependency :: (Monad m) => ActualDependency -> Node -> PG m ()
@@ -85,16 +117,16 @@ insertModuleNode (modulename,declarations) versionnode = do
     forM_ declarations (flip insertDeclaration modulenode)
 
 insertDeclaration :: (Monad m) => Declaration -> Node -> PG m ()
-insertDeclaration (Declaration declarationgenre declarationast declaredsymbols usedsymbols) modulenode = do
+insertDeclaration (Declaration declarationgenre declarationast _ _) modulenode = do
     declarationnode <- start modulenode >>= newNextLabeled "Declaration"
-    start declarationnode >>= newProperty "declarationgenre" (pack (show declarationgenre))
-    start declarationnode >>= newProperty "declarationast" (pack declarationast)
+    start declarationnode >>= insertProperty "declarationgenre" (pack (show declarationgenre))
+    start declarationnode >>= insertProperty "declarationast" (pack declarationast)
     return ()
 
 newModuleNode :: (Monad m) => ModuleName -> Node -> PG m Node
 newModuleNode modulename versionnode = do
     modulenode <- start versionnode >>= newNextLabeled "Module"
-    start modulenode >>= newProperty "modulename" (pack (display modulename))
+    start modulenode >>= insertProperty "modulename" (pack (display modulename))
     return modulenode
 
 insertPackageError :: (Monad m) => PackageName -> VersionNumber -> PackageError -> PG m ()
